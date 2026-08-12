@@ -25,6 +25,7 @@ app = FastAPI(title="Pattern 123 Trading Assistant")
 telegram_app = None
 
 
+
 def menu():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("📊 ساختار", callback_data="structure")],
@@ -67,7 +68,6 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         messages.get(query.data, "OK"),
         reply_markup=menu()
     )
-
 
 async def start_telegram():
     global telegram_app
