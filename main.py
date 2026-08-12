@@ -26,7 +26,24 @@ telegram_app = None
 
 
 
-def menu():
+def menu():def settings_menu():
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("📊 انتخاب بازار", callback_data="market"),
+        ],
+        [
+            InlineKeyboardButton("🪙 انتخاب نماد", callback_data="symbol"),
+        ],
+        [
+            InlineKeyboardButton("⏱ تایم‌فریم", callback_data="timeframe"),
+        ],
+        [
+            InlineKeyboardButton("📰 اخبارها", callback_data="news"),
+        ],
+        [
+            InlineKeyboardButton("⬅️ بازگشت", callback_data="back"),
+        ],
+    ])
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("📊 ساختار", callback_data="structure")],
         [
