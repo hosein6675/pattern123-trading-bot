@@ -24,9 +24,6 @@ app = FastAPI(title="Pattern 123 Trading Assistant")
 
 telegram_app = None
 
-
-
-def menu():
     def settings_menu():
     return InlineKeyboardMarkup([
         [
