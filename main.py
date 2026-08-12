@@ -193,5 +193,5 @@ async def run_bot():
 if __name__ == "__main__":
     import uvicorn
     # Render can run the web server; Telegram polling runs in the same process.
-    asyncio.get_event_loop().create_task(run_bot())
+    asyncio.run(run_bot())
     uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", "10000")))
