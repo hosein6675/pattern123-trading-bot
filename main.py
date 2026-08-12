@@ -26,7 +26,8 @@ telegram_app = None
 
 
 
-def menu():def settings_menu():
+def menu():
+    def settings_menu():
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("📊 انتخاب بازار", callback_data="market"),
