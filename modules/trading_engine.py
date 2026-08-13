@@ -6,6 +6,7 @@ from modules.journal import JournalEngine
 from modules.account_manager import AccountManager
 from modules.market_context import MarketContextAnalyzer
 from modules.news_filter import NewsFilter
+from modules.order_manager import OrderManager
 from modules.config import active_config
 
 
@@ -30,6 +31,8 @@ class TradingEngine:
         self.account = AccountManager()
 
         self.news = NewsFilter()
+
+        self.orders = OrderManager()
 
 
 
@@ -58,7 +61,7 @@ class TradingEngine:
 
 
 
-        # بررسی اخبار
+        # بررسی خبر
 
         news_status = self.news.check_news(symbol)
 
@@ -86,41 +89,41 @@ class TradingEngine:
 
 
 
-        # بررسی شرایط کلی بازار
-
         market_context = self.context.analyze(
+
             candles,
+
             symbol
+
         )
 
 
-
-        # تحلیل ساختار
 
         structure_result = self.structure.analyze(
+
             candles
+
         )
 
 
-
-        # تحلیل پرایس اکشن
 
         pa_result = self.price_action.analyze(
+
             structure_result,
+
             candles
+
         )
 
 
-
-        # تحلیل MACD
 
         macd_result = self.macd.analyze(
+
             candles
+
         )
 
 
-
-        # مدیریت سرمایه
 
         risk_result = self.risk.check(
 
@@ -135,6 +138,7 @@ class TradingEngine:
 
 
         return {
+
 
             "symbol": symbol,
 
@@ -155,3 +159,36 @@ class TradingEngine:
             "risk": risk_result
 
         }
+
+
+
+    def execute_order(
+
+        self,
+
+        symbol,
+
+        direction,
+
+        volume,
+
+        stop_loss,
+
+        take_profit
+
+    ):
+
+
+        return self.orders.execute_trade(
+
+            symbol,
+
+            direction,
+
+            volume,
+
+            stop_loss,
+
+            take_profit
+
+        )
