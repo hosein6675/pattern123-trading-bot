@@ -1,11 +1,26 @@
-BOT_NAME = "Pattern123 Trading Bot"
+from dataclasses import dataclass
 
-DEFAULT_BALANCE = 1000
 
-MAX_DAILY_DRAWDOWN = 5
-MAX_WEEKLY_DRAWDOWN = 12
-MAX_MONTHLY_DRAWDOWN = 15
+@dataclass
+class BotConfig:
 
-DEFAULT_MODE = "DEMO"
+    mode: str = "demo"
 
-DEFAULT_SYMBOL = "XAUUSD"
+    market: str = "forex"
+
+    symbol: str = "XAUUSD"
+
+    timeframe: str = "H1"
+
+    trade_news: bool = False
+
+    initial_balance: float = 1000
+
+    daily_drawdown_limit: float = 5
+
+    weekly_drawdown_limit: float = 12
+
+    monthly_drawdown_limit: float = 15
+
+
+active_config = BotConfig()
