@@ -4,17 +4,28 @@ from datetime import datetime
 
 @dataclass
 class Candle:
+
     symbol: str
     timeframe: str
     timestamp: str
+
     open: float
     high: float
     low: float
     close: float
-    volume: float
+
+    volume: float = 0
+
 
 
 class MarketDataEngine:
+
+
+    def __init__(self):
+
+        self.provider = "demo"
+
+
 
     def get_candles(
         self,
@@ -23,13 +34,29 @@ class MarketDataEngine:
         limit: int = 100
     ):
 
-        # در نسخه دمو به دیتا پروایدر واقعی وصل می‌شود
-        # فعلاً فقط ساختار آماده است
+        candles = []
+
 
         return {
+
             "symbol": symbol,
+
             "timeframe": timeframe,
-            "count": limit,
-            "status": "data provider ready",
+
+            "candles": candles,
+
+            "count": len(candles),
+
+            "provider": self.provider,
+
+            "status": "ready",
+
             "created_at": str(datetime.utcnow())
+
         }
+
+
+
+    def add_candle(self, candle: Candle):
+
+        return candle
