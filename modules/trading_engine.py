@@ -40,6 +40,26 @@ class TradingEngine:
 
 
 
+        # بررسی قفل نماد
+
+        if not active_config.is_symbol_allowed(symbol):
+
+            return {
+
+                "symbol": symbol,
+
+                "timeframe": timeframe,
+
+                "account": account,
+
+                "status": "symbol_not_allowed"
+
+            }
+
+
+
+        # بررسی اخبار
+
         news_status = self.news.check_news(symbol)
 
 
@@ -66,6 +86,8 @@ class TradingEngine:
 
 
 
+        # بررسی شرایط کلی بازار
+
         market_context = self.context.analyze(
             candles,
             symbol
@@ -73,11 +95,15 @@ class TradingEngine:
 
 
 
+        # تحلیل ساختار
+
         structure_result = self.structure.analyze(
             candles
         )
 
 
+
+        # تحلیل پرایس اکشن
 
         pa_result = self.price_action.analyze(
             structure_result,
@@ -86,11 +112,15 @@ class TradingEngine:
 
 
 
+        # تحلیل MACD
+
         macd_result = self.macd.analyze(
             candles
         )
 
 
+
+        # مدیریت سرمایه
 
         risk_result = self.risk.check(
 
