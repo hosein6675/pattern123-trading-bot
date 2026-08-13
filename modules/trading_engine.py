@@ -5,6 +5,8 @@ from modules.risk_manager import RiskManager
 from modules.journal import JournalEngine
 from modules.account_manager import AccountManager
 from modules.market_context import MarketContextAnalyzer
+from modules.news_filter import NewsFilter
+from modules.config import active_config
 
 
 
@@ -27,17 +29,43 @@ class TradingEngine:
 
         self.account = AccountManager()
 
+        self.news = NewsFilter()
+
 
 
     def analyze_market(self, symbol, timeframe, candles):
 
 
-        # دریافت وضعیت حساب
         account = self.account.get_account()
 
 
 
-        # بررسی شرایط کلی بازار قبل از سیگنال
+        news_status = self.news.check_news(symbol)
+
+
+
+        if (
+            news_status.has_news
+            and news_status.impact == "high"
+            and active_config.trade_news is False
+        ):
+
+            return {
+
+                "symbol": symbol,
+
+                "timeframe": timeframe,
+
+                "account": account,
+
+                "news": news_status,
+
+                "status": "trade_blocked_news"
+
+            }
+
+
+
         market_context = self.context.analyze(
             candles,
             symbol
@@ -45,14 +73,12 @@ class TradingEngine:
 
 
 
-        # تحلیل ساختار بازار
         structure_result = self.structure.analyze(
             candles
         )
 
 
 
-        # تحلیل پرایس اکشن
         pa_result = self.price_action.analyze(
             structure_result,
             candles
@@ -60,14 +86,12 @@ class TradingEngine:
 
 
 
-        # تحلیل MACD
         macd_result = self.macd.analyze(
             candles
         )
 
 
 
-        # مدیریت سرمایه
         risk_result = self.risk.check(
 
             balance=account.balance,
@@ -87,6 +111,8 @@ class TradingEngine:
             "timeframe": timeframe,
 
             "account": account,
+
+            "news": news_status,
 
             "market_context": market_context,
 
