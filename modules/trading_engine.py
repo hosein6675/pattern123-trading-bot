@@ -4,6 +4,7 @@ from modules.macd_engine import MACDEngine
 from modules.risk_manager import RiskManager
 from modules.journal import JournalEngine
 from modules.account_manager import AccountManager
+from modules.market_context import MarketContextAnalyzer
 
 
 
@@ -11,6 +12,8 @@ class TradingEngine:
 
 
     def __init__(self):
+
+        self.context = MarketContextAnalyzer()
 
         self.structure = StructureAnalyzer()
 
@@ -29,13 +32,23 @@ class TradingEngine:
     def analyze_market(self, symbol, timeframe, candles):
 
 
-        # دریافت وضعیت حساب دمو
+        # دریافت وضعیت حساب
         account = self.account.get_account()
 
 
 
+        # بررسی شرایط کلی بازار قبل از سیگنال
+        market_context = self.context.analyze(
+            candles,
+            symbol
+        )
+
+
+
         # تحلیل ساختار بازار
-        structure_result = self.structure.analyze(candles)
+        structure_result = self.structure.analyze(
+            candles
+        )
 
 
 
@@ -48,11 +61,13 @@ class TradingEngine:
 
 
         # تحلیل MACD
-        macd_result = self.macd.analyze(candles)
+        macd_result = self.macd.analyze(
+            candles
+        )
 
 
 
-        # بررسی مدیریت سرمایه
+        # مدیریت سرمایه
         risk_result = self.risk.check(
 
             balance=account.balance,
@@ -72,6 +87,8 @@ class TradingEngine:
             "timeframe": timeframe,
 
             "account": account,
+
+            "market_context": market_context,
 
             "structure": structure_result,
 
