@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 
+
 @dataclass
 class MarketContext:
 
@@ -36,7 +37,29 @@ class MarketContextAnalyzer:
     def analyze(self, candles, symbol):
 
 
-        if len(candles) < 50:
+        # دریافت دیتا از چند تایم فریم
+
+        if isinstance(candles, dict):
+
+            daily = candles.get(
+                "D1",
+                []
+            )
+
+            h4 = candles.get(
+                "H4",
+                []
+            )
+
+        else:
+
+            daily = candles
+
+            h4 = candles
+
+
+
+        if len(daily) < 20 or len(h4) < 20:
 
             return MarketContext(
 
@@ -68,30 +91,117 @@ class MarketContextAnalyzer:
 
 
 
+        d1_trend = self.detect_trend(
+            daily
+        )
+
+
+        h4_trend = self.detect_trend(
+            h4
+        )
+
+
+
+        trend = d1_trend
+
+
+        phase = "continuation"
+
+
+
+        if d1_trend == h4_trend:
+
+            trend = d1_trend
+
+            phase = "trend_continuation"
+
+
+
+        elif d1_trend != h4_trend:
+
+            trend = d1_trend
+
+            phase = "correction"
+
+
+
+        confidence = 50
+
+
+        if d1_trend == h4_trend:
+
+            confidence = 80
+
+
+
         return MarketContext(
 
             symbol=symbol,
 
-            trend="analysis_pending",
+            trend=trend,
 
-            structure="analysis_pending",
+            structure=h4_trend,
 
-            last_leg="analysis_pending",
+            last_leg=h4_trend,
 
-            correction="analysis_pending",
+            correction="yes" if phase == "correction" else "no",
 
-            fib_zone="analysis_pending",
+            fib_zone="pending",
 
-            phase="ready_for_strategy",
+            phase=phase,
 
-            market_condition="pending",
+            market_condition="normal",
 
             support_resistance="pending",
 
             liquidity="pending",
 
-            session="pending",
+            session="unknown",
 
-            confidence=0
+            confidence=confidence
 
         )
+
+
+
+    def detect_trend(self, candles):
+
+
+        highs = []
+
+        lows = []
+
+
+        for candle in candles:
+
+
+            highs.append(
+                candle["high"]
+            )
+
+
+            lows.append(
+                candle["low"]
+            )
+
+
+
+        if len(highs) < 5:
+
+            return "unknown"
+
+
+
+        if highs[-1] > highs[-5] and lows[-1] > lows[-5]:
+
+            return "bullish"
+
+
+
+        if highs[-1] < highs[-5] and lows[-1] < lows[-5]:
+
+            return "bearish"
+
+
+
+        return "range"
