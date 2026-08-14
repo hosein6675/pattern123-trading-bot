@@ -14,12 +14,22 @@ from telegram.ext import (
 from modules.config import active_config
 
 
+SYMBOLS = [
+    "XAUUSD",
+    "EURUSD",
+    "GBPUSD",
+    "BTCUSD",
+    "ETHUSD"
+]
+
+
 class TelegramBot:
 
     def __init__(self, token: str):
 
         self.token = token
         self.application = None
+
 
     def main_menu(self):
 
@@ -66,29 +76,24 @@ class TelegramBot:
 
         return InlineKeyboardMarkup(keyboard)
 
-    async def start(
-        self,
-        update: Update,
-        context: ContextTypes.DEFAULT_TYPE
-    ):
+
+
+    async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await update.message.reply_text(
-
             "🤖 دستیار Pattern 123 فعال شد.\n\n"
             "از منوی زیر انتخاب کن:",
-
             reply_markup=self.main_menu()
         )
 
-    async def button(
-        self,
-        update: Update,
-        context: ContextTypes.DEFAULT_TYPE
-    ):
+
+
+    async def button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         query = update.callback_query
 
         await query.answer()
+
 
         if query.data == "market_status":
 
@@ -96,23 +101,33 @@ class TelegramBot:
                 "📊 وضعیت بازار\n\n"
                 f"بازار: {active_config.market}\n"
                 f"نماد: {active_config.symbol}\n"
-                f"تایم‌فریم: {active_config.timeframe}\n"
                 f"حالت: {active_config.mode}"
             )
+
 
         elif query.data == "symbol":
 
             text = (
-                "🪙 نماد فعال:\n\n"
-                f"{active_config.symbol}"
+                "🪙 نمادهای فعال:\n\n"
+                + "\n".join(SYMBOLS)
             )
+
 
         elif query.data == "timeframe":
 
             text = (
-                "⏱ تایم‌فریم فعال:\n\n"
-                f"{active_config.timeframe}"
+                "⏱ تایم‌فریم چندلایه\n\n"
+
+                "📈 روند:\n"
+                + "\n".join(active_config.trend_timeframes)
+
+                + "\n\n🏗 ساختار:\n"
+                + "\n".join(active_config.structure_timeframes)
+
+                + "\n\n🎯 ورود:\n"
+                + "\n".join(active_config.entry_timeframes)
             )
+
 
         elif query.data == "news":
 
@@ -122,24 +137,29 @@ class TelegramBot:
                 f"{'فعال' if active_config.trade_news else 'غیرفعال'}"
             )
 
+
         elif query.data == "account":
 
             text = (
                 "💰 وضعیت حساب\n\n"
-                f"حالت حساب: {active_config.mode}\n"
-                f"سرمایه اولیه: ${active_config.initial_balance:.2f}"
+                f"حالت: {active_config.mode}\n"
+                f"سرمایه: ${active_config.initial_balance:.2f}"
             )
+
 
         elif query.data == "analysis":
 
             text = (
-                "📈 موتور تحلیل\n\n"
-                "Market Context: آماده\n"
-                "Structure: آماده\n"
-                "Price Action: آماده\n"
-                "MACD: آماده\n"
-                "Risk Manager: آماده"
+                "📈 موتور تحلیل Pattern 123\n\n"
+                "📌 Trend:\n"
+                "D1 + H4\n\n"
+                "📌 Structure:\n"
+                "H4 + H1 + M15\n\n"
+                "📌 Entry:\n"
+                "M15 + M5 + M1\n\n"
+                "وضعیت: آماده اتصال به موتور تحلیل"
             )
+
 
         elif query.data == "settings":
 
@@ -147,21 +167,22 @@ class TelegramBot:
                 "⚙️ تنظیمات فعلی\n\n"
                 f"بازار: {active_config.market}\n"
                 f"نماد: {active_config.symbol}\n"
-                f"تایم‌فریم: {active_config.timeframe}\n"
                 f"Auto Trading: "
                 f"{'فعال' if active_config.auto_trading else 'غیرفعال'}"
             )
+
 
         else:
 
             text = "دستور ناشناخته است."
 
+
         await query.edit_message_text(
-
             text,
-
             reply_markup=self.main_menu()
         )
+
+
 
     def build(self):
 
@@ -172,6 +193,7 @@ class TelegramBot:
             .build()
         )
 
+
         self.application.add_handler(
             CommandHandler(
                 "start",
@@ -179,10 +201,12 @@ class TelegramBot:
             )
         )
 
+
         self.application.add_handler(
             CallbackQueryHandler(
                 self.button
             )
         )
+
 
         return self.application
