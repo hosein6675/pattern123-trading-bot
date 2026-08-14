@@ -7,6 +7,7 @@ from modules.account_manager import AccountManager
 from modules.market_context import MarketContextAnalyzer
 from modules.news_filter import NewsFilter
 from modules.order_manager import OrderManager
+from modules.market_data import MarketDataEngine
 from modules.config import active_config
 
 
@@ -34,16 +35,21 @@ class TradingEngine:
 
         self.orders = OrderManager()
 
+        self.market_data = MarketDataEngine()
 
 
-    def analyze_market(self, symbol, timeframe, candles):
+
+    def analyze_market(
+        self,
+        symbol,
+        timeframe=None,
+        candles=None
+    ):
 
 
         account = self.account.get_account()
 
 
-
-        # بررسی قفل نماد
 
         if not active_config.is_symbol_allowed(symbol):
 
@@ -51,17 +57,30 @@ class TradingEngine:
 
                 "symbol": symbol,
 
-                "timeframe": timeframe,
-
-                "account": account,
-
                 "status": "symbol_not_allowed"
 
             }
 
 
 
-        # بررسی خبر
+        # اگر کندل ارسال نشده بود، از MT5 بگیر
+
+        if not candles:
+
+            candles_result = self.market_data.get_candles(
+
+                symbol,
+
+                timeframe or active_config.timeframe,
+
+                days=200
+
+            )
+
+
+            candles = candles_result["candles"]
+
+
 
         news_status = self.news.check_news(symbol)
 
@@ -76,10 +95,6 @@ class TradingEngine:
             return {
 
                 "symbol": symbol,
-
-                "timeframe": timeframe,
-
-                "account": account,
 
                 "news": news_status,
 
