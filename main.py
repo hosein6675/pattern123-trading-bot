@@ -1,12 +1,13 @@
 import os
-import asyncio
 import logging
+import asyncio
 
 import uvicorn
 from fastapi import FastAPI, Request
 
 from modules.trading_engine import TradingEngine
 from modules.config import active_config
+from modules.telegram_bot import TelegramBot
 
 
 logging.basicConfig(level=logging.INFO)
@@ -23,26 +24,71 @@ WEBHOOK_SECRET = os.getenv(
 )
 
 
+BOT_TOKEN = os.getenv(
+    "BOT_TOKEN",
+    ""
+)
+
+
 trading_engine = TradingEngine()
 
+telegram_bot = None
 
 
 @app.on_event("startup")
 async def startup_event():
 
+    global telegram_bot
+
     logging.info(
         "Pattern123 Trading Bot Started"
     )
 
+    if BOT_TOKEN:
+
+        telegram_bot = TelegramBot(
+            BOT_TOKEN
+        )
+
+        telegram_bot.build()
+
+        await telegram_bot.application.initialize()
+
+        await telegram_bot.application.start()
+
+        await telegram_bot.application.updater.start_polling()
+
+        logging.info(
+            "Telegram bot started"
+        )
+
+    else:
+
+        logging.warning(
+            "BOT_TOKEN not found. Telegram disabled."
+        )
 
 
 @app.on_event("shutdown")
 async def shutdown_event():
 
+    global telegram_bot
+
+    if telegram_bot:
+
+        await telegram_bot.application.updater.stop()
+
+        await telegram_bot.application.stop()
+
+        await telegram_bot.application.shutdown()
+
+        logging.info(
+            "Telegram bot stopped"
+        )
+
     logging.info(
         "Pattern123 Trading Bot Stopped"
     )
-
 
 
 @app.get("/")
@@ -61,10 +107,47 @@ async def health():
     }
 
 
+@app.post("/analyze")
+async def analyze_market(request: Request):
+
+    data = await request.json()
+
+    symbol = data.get(
+        "symbol",
+        active_config.symbol
+    )
+
+    timeframe = data.get(
+        "timeframe",
+        active_config.timeframe
+    )
+
+    candles = data.get(
+        "candles",
+        []
+    )
+
+    result = trading_engine.analyze_market(
+
+        symbol,
+
+        timeframe,
+
+        candles
+
+    )
+
+    return {
+
+        "ok": True,
+
+        "analysis": result
+
+    }
+
 
 @app.post("/webhook/market")
 async def market_webhook(request: Request):
-
 
     if request.headers.get(
         "X-Webhook-Secret"
@@ -78,30 +161,22 @@ async def market_webhook(request: Request):
 
         }
 
-
-
     data = await request.json()
-
-
 
     symbol = data.get(
         "symbol",
         active_config.symbol
     )
 
-
     timeframe = data.get(
         "timeframe",
         active_config.timeframe
     )
 
-
     candles = data.get(
         "candles",
         []
     )
-
-
 
     result = trading_engine.analyze_market(
 
@@ -113,8 +188,6 @@ async def market_webhook(request: Request):
 
     )
 
-
-
     return {
 
         "ok": True,
@@ -122,8 +195,6 @@ async def market_webhook(request: Request):
         "result": result
 
     }
-
-
 
 
 @app.post("/trade/test")
@@ -143,7 +214,6 @@ async def test_trade():
 
     )
 
-
     return {
 
         "ok": True,
@@ -153,11 +223,7 @@ async def test_trade():
     }
 
 
-
-
-
 if __name__ == "__main__":
-
 
     port = int(
 
@@ -170,7 +236,6 @@ if __name__ == "__main__":
         )
 
     )
-
 
     uvicorn.run(
 
