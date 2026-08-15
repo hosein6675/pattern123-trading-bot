@@ -38,6 +38,8 @@ class TradingEngine:
 
         self.decision = DecisionEngine()
 
+
+
     def analyze_market(
         self,
         symbol,
@@ -50,180 +52,160 @@ class TradingEngine:
             or active_config.timeframe
         )
 
+
         account = self.account.get_account()
 
-        # ==========================================
-        # 1. SYMBOL FILTER
-        # ==========================================
+
 
         if not active_config.is_symbol_allowed(symbol):
 
-            return {
-                "symbol": symbol,
-                "status": "symbol_not_allowed",
-                "decision": "NO_TRADE"
-            }
-
-        # ==========================================
-        # 2. MARKET DATA
-        # ==========================================
-
-        if not candles:
-
-            candles_result = (
-                self.market_data.get_candles(
-                    symbol,
-                    timeframe,
-                    days=200
-                )
+            return self.no_trade(
+                symbol,
+                timeframe,
+                account,
+                "Symbol not allowed"
             )
 
-            if not candles_result:
 
-                return {
-                    "symbol": symbol,
-                    "status": "market_data_error",
-                    "decision": "NO_TRADE"
-                }
 
-            candles = candles_result.get(
+        if candles is None:
+
+            market = self.market_data.get_candles(
+                symbol,
+                timeframe,
+                days=200
+            )
+
+
+            if market.get("status") != "ready":
+
+                return self.no_trade(
+                    symbol,
+                    timeframe,
+                    account,
+                    "Market data unavailable"
+                )
+
+
+            candles = market.get(
                 "candles",
                 []
             )
 
-        if not candles:
 
-            return {
-                "symbol": symbol,
-                "status": "no_candles",
-                "decision": "NO_TRADE"
-            }
 
-        # ==========================================
-        # 3. NEWS FILTER
-        # ==========================================
+        if len(candles) < 50:
 
-        news_status = self.news.check_news(
+            return self.no_trade(
+                symbol,
+                timeframe,
+                account,
+                "Not enough candles"
+            )
+
+
+
+        news = self.news.check_news(
             symbol
         )
 
-        if (
-            news_status.has_news
-            and news_status.impact == "high"
-            and active_config.trade_news is False
-        ):
 
-            return {
-                "symbol": symbol,
-                "timeframe": timeframe,
-                "account": account,
-                "news": news_status,
-                "status": "trade_blocked_news",
-                "decision": "NO_TRADE"
-            }
+        if not news.allow_trade:
 
-        # ==========================================
-        # 4. MARKET CONTEXT
-        # ==========================================
+            return self.no_trade(
+                symbol,
+                timeframe,
+                account,
+                "News blocked trade"
+            )
 
-        market_context = self.context.analyze(
+
+
+        context = self.context.analyze(
             candles,
             symbol
         )
 
-        # ==========================================
-        # 5. STRUCTURE
-        # ==========================================
 
-        structure_result = self.structure.analyze(
+        structure = self.structure.analyze(
             candles
         )
 
-        # ==========================================
-        # 6. PRICE ACTION
-        # ==========================================
 
-        pa_result = self.price_action.analyze(
-            structure_result,
+        price_action = self.price_action.analyze(
+            structure,
             candles
         )
 
-        # ==========================================
-        # 7. MACD
-        # ==========================================
 
-        macd_result = self.macd.analyze(
+        macd = self.macd.analyze(
             candles
         )
 
-        # ==========================================
-        # 8. CURRENT OPEN POSITIONS
-        # ==========================================
 
-        open_positions = (
-            self.orders.get_open_positions()
+
+        decision = self.decision.analyze(
+
+            structure=structure,
+
+            price_action=price_action,
+
+            macd=macd,
+
+            market_context=context,
+
+            news=news
+
         )
 
-        open_position_count = len(
-            open_positions
-        )
 
-        # ==========================================
-        # 9. INITIAL DECISION
-        # ==========================================
 
-        decision_result = self.decision.analyze(
-            structure=structure_result,
-            price_action=pa_result,
-            macd=macd_result,
-            market_context=market_context,
-            news=news_status,
-            risk=None
-        )
+        positions = self.orders.get_open_positions()
 
-        # ==========================================
-        # 10. RISK CHECK
-        # ==========================================
 
-        entry = getattr(
-            pa_result,
-            "entry",
-            0
-        )
+        if positions is None:
 
-        stop_loss = getattr(
-            pa_result,
-            "stop_loss",
-            0
-        )
+            positions = []
 
-        quality = getattr(
-            decision_result,
-            "quality",
-            0
-        )
 
-        risk_result = self.risk.check(
+
+        risk = self.risk.check(
+
             balance=account.balance,
-            entry=entry,
-            stop_loss=stop_loss,
-            quality=quality,
+
+            entry=price_action.entry,
+
+            stop_loss=price_action.stop_loss,
+
+            quality=decision.quality,
+
             loss_amount=0,
-            open_positions=open_position_count
+
+            open_positions=len(
+                positions
+            )
+
         )
 
-        # ==========================================
-        # 11. FINAL DECISION
-        # ==========================================
+
 
         final_decision = self.decision.analyze(
-            structure=structure_result,
-            price_action=pa_result,
-            macd=macd_result,
-            market_context=market_context,
-            news=news_status,
-            risk=risk_result
+
+            structure=structure,
+
+            price_action=price_action,
+
+            macd=macd,
+
+            market_context=context,
+
+            news=news,
+
+            risk=risk
+
         )
+
+
 
         return {
 
@@ -235,22 +217,28 @@ class TradingEngine:
 
             "account": account,
 
-            "news": news_status,
+            "market_context": context,
 
-            "market_context": market_context,
+            "structure": structure,
 
-            "structure": structure_result,
+            "price_action": price_action,
 
-            "price_action": pa_result,
+            "macd": macd,
 
-            "macd": macd_result,
+            "news": news,
 
-            "risk": risk_result,
+            "risk": risk,
 
             "decision": final_decision,
 
-            "open_positions": open_position_count
+            "open_positions": len(
+                positions
+            )
+
         }
+
+
+
 
     def execute_order(
         self,
@@ -261,20 +249,77 @@ class TradingEngine:
         take_profit
     ):
 
+
+        if direction not in (
+            "buy",
+            "sell"
+        ):
+
+            return {
+
+                "success": False,
+
+                "message":
+                "Invalid direction"
+
+            }
+
+
+
         return self.orders.execute_trade(
+
             symbol=symbol,
+
             direction=direction,
+
             volume=volume,
+
             stop_loss=stop_loss,
+
             take_profit=take_profit
+
         )
 
-    def close_order(self, order_id):
+
+
+
+    def close_order(
+        self,
+        order_id
+    ):
 
         return self.orders.close_trade(
             order_id
         )
 
+
+
+
     def get_open_positions(self):
 
         return self.orders.get_open_positions()
+
+
+
+
+    def no_trade(
+        self,
+        symbol,
+        timeframe,
+        account,
+        reason
+    ):
+
+        return {
+
+            "symbol": symbol,
+
+            "timeframe": timeframe,
+
+            "status": reason,
+
+            "account": account,
+
+            "decision": "NO_TRADE"
+
+        }
