@@ -6,15 +6,25 @@ class StructureResult:
 
     trend: str
 
-    highs: list
+    swing_highs: list
 
-    lows: list
+    swing_lows: list
 
     bos: bool
 
     choch: bool
 
-    structure_state: str
+    last_bos_level: float
+
+    last_choch_level: float
+
+    impulse_leg: dict
+
+    correction_leg: dict
+
+    structure_quality: int
+
+    market_state: str
 
     description: str
 
@@ -26,66 +36,101 @@ class StructureAnalyzer:
     def analyze(self, candles):
 
 
-        if isinstance(candles, dict):
-
-            # اولویت ساختار با M15
-            candles = candles.get(
-                "M15",
-                []
-            )
-
-
-        if len(candles) < 20:
+        if not candles or len(candles) < 30:
 
             return StructureResult(
 
                 trend="unknown",
 
-                highs=[],
+                swing_highs=[],
 
-                lows=[],
+                swing_lows=[],
 
                 bos=False,
 
                 choch=False,
 
-                structure_state="no_data",
+                last_bos_level=0,
+
+                last_choch_level=0,
+
+                impulse_leg={},
+
+                correction_leg={},
+
+                structure_quality=0,
+
+                market_state="no_data",
 
                 description="Not enough candles"
 
             )
 
 
+        swing_highs = []
 
-        highs = []
-
-        lows = []
+        swing_lows = []
 
 
+        # پیدا کردن Swing های معتبر
 
         for i in range(2, len(candles)-2):
 
 
-            current_high = candles[i]["high"]
+            high = candles[i]["high"]
 
-            current_low = candles[i]["low"]
-
-
-            if (
-                current_high > candles[i-1]["high"]
-                and current_high > candles[i+1]["high"]
-            ):
-
-                highs.append(current_high)
-
+            low = candles[i]["low"]
 
 
             if (
-                current_low < candles[i-1]["low"]
-                and current_low < candles[i+1]["low"]
+
+                high > candles[i-1]["high"]
+
+                and high > candles[i+1]["high"]
+
+                and high > candles[i-2]["high"]
+
+                and high > candles[i+2]["high"]
+
             ):
 
-                lows.append(current_low)
+                swing_highs.append(
+
+                    {
+
+                        "index": i,
+
+                        "price": high
+
+                    }
+
+                )
+
+
+
+            if (
+
+                low < candles[i-1]["low"]
+
+                and low < candles[i+1]["low"]
+
+                and low < candles[i-2]["low"]
+
+                and low < candles[i+2]["low"]
+
+            ):
+
+                swing_lows.append(
+
+                    {
+
+                        "index": i,
+
+                        "price": low
+
+                    }
+
+                )
 
 
 
@@ -95,67 +140,140 @@ class StructureAnalyzer:
 
         choch = False
 
-        state = "range"
+        last_bos = 0
+
+        last_choch = 0
 
 
 
-        if len(highs) >= 2 and len(lows) >= 2:
+        quality = 0
 
 
-            # ساختار صعودی
+
+        # تشخیص روند
+
+        if len(swing_highs) >= 2 and len(swing_lows) >= 2:
+
+
+            last_high = swing_highs[-1]["price"]
+
+            prev_high = swing_highs[-2]["price"]
+
+
+            last_low = swing_lows[-1]["price"]
+
+            prev_low = swing_lows[-2]["price"]
+
+
+
+            # روند صعودی
 
             if (
-                highs[-1] > highs[-2]
-                and lows[-1] > lows[-2]
+
+                last_high > prev_high
+
+                and last_low > prev_low
+
             ):
 
                 trend = "bullish"
 
-                state = "bullish_continuation"
+                quality += 30
+
+
+
+                # BOS صعودی
 
                 bos = True
 
+                last_bos = last_high
 
 
-            # ساختار نزولی
+
+            # روند نزولی
 
             elif (
-                highs[-1] < highs[-2]
-                and lows[-1] < lows[-2]
+
+                last_high < prev_high
+
+                and last_low < prev_low
+
             ):
 
                 trend = "bearish"
 
-                state = "bearish_continuation"
+                quality += 30
+
+
+
+                # BOS نزولی
 
                 bos = True
 
-
-
-        # تشخیص تغییر رفتار ساده
-
-        if len(highs) >= 2 and len(lows) >= 2:
-
-
-            if (
-                trend == "bullish"
-                and lows[-1] < lows[-2]
-            ):
-
-                choch = True
-
-                state = "possible_bearish_reversal"
+                last_bos = last_low
 
 
 
-            elif (
-                trend == "bearish"
-                and highs[-1] > highs[-2]
-            ):
+        # تشخیص CHoCH
+
+        if trend == "bullish" and len(swing_lows) >= 2:
+
+
+            if swing_lows[-1]["price"] < swing_lows[-2]["price"]:
 
                 choch = True
 
-                state = "possible_bullish_reversal"
+                last_choch = swing_lows[-1]["price"]
+
+
+
+        elif trend == "bearish" and len(swing_highs) >= 2:
+
+
+            if swing_highs[-1]["price"] > swing_highs[-2]["price"]:
+
+                choch = True
+
+                last_choch = swing_highs[-1]["price"]
+
+
+
+        # قدرت ساختار
+
+        if bos:
+
+            quality += 25
+
+
+        if len(swing_highs) >= 3:
+
+            quality += 20
+
+
+        if len(swing_lows) >= 3:
+
+            quality += 20
+
+
+
+        if quality > 100:
+
+            quality = 100
+
+
+
+        impulse = self.get_impulse_leg(
+
+            candles
+
+        )
+
+
+        correction = self.get_correction_leg(
+
+            candles
+
+        )
 
 
 
@@ -163,16 +281,52 @@ class StructureAnalyzer:
 
             trend=trend,
 
-            highs=highs,
+            swing_highs=swing_highs,
 
-            lows=lows,
+            swing_lows=swing_lows,
 
             bos=bos,
 
             choch=choch,
 
-            structure_state=state,
+            last_bos_level=last_bos,
 
-            description="Structure analyzed with BOS and CHoCH"
+            last_choch_level=last_choch,
+
+            impulse_leg=impulse,
+
+            correction_leg=correction,
+
+            structure_quality=quality,
+
+            market_state=trend,
+
+            description="Advanced structure analysis"
 
         )
+
+
+
+    def get_impulse_leg(self, candles):
+
+
+        return {
+
+            "start": candles[-20]["close"],
+
+            "end": candles[-5]["close"]
+
+        }
+
+
+
+    def get_correction_leg(self, candles):
+
+
+        return {
+
+            "start": candles[-5]["close"],
+
+            "end": candles[-1]["close"]
+
+        }
