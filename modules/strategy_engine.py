@@ -1,3 +1,4 @@
+```python
 from dataclasses import dataclass
 
 from modules.strategy_config import active_strategy
@@ -17,24 +18,20 @@ class StrategyResult:
     message: str
 
 
-
 class StrategyEngine:
-
 
     def __init__(self):
 
         self.config = active_strategy
-
-
 
     def evaluate(
         self,
         structure,
         price_action,
         macd,
-        market_context
+        market_context,
+        timeframe=None
     ):
-
 
         score = 0
 
@@ -42,14 +39,54 @@ class StrategyEngine:
 
         warnings = []
 
+        # =====================================
+        # BASIC VALIDATION
+        # =====================================
 
+        if structure is None:
+
+            return self.no_trade(
+                "Structure unavailable"
+            )
+
+        if price_action is None:
+
+            return self.no_trade(
+                "Price action unavailable"
+            )
+
+        if macd is None:
+
+            return self.no_trade(
+                "MACD unavailable"
+            )
+
+        if market_context is None:
+
+            return self.no_trade(
+                "Market context unavailable"
+            )
 
         # =====================================
-        # TIMEFRAME / STRUCTURE
+        # TIMEFRAME
+        # =====================================
+
+        if timeframe is not None:
+
+            if (
+                timeframe
+                not in self.config.allowed_timeframes
+            ):
+
+                return self.no_trade(
+                    "Timeframe not allowed"
+                )
+
+        # =====================================
+        # STRUCTURE
         # =====================================
 
         if self.config.require_structure:
-
 
             structure_quality = getattr(
                 structure,
@@ -57,8 +94,10 @@ class StrategyEngine:
                 0
             )
 
-
-            if structure_quality >= self.config.minimum_structure_quality:
+            if (
+                structure_quality
+                >= self.config.minimum_structure_quality
+            ):
 
                 score += 25
 
@@ -72,8 +111,6 @@ class StrategyEngine:
                     "Weak market structure"
                 )
 
-
-
         # =====================================
         # PRICE ACTION
         # =====================================
@@ -84,21 +121,19 @@ class StrategyEngine:
             False
         )
 
-
         pa_confidence = getattr(
             price_action,
             "confidence",
             0
         )
 
-
         if self.config.require_pattern_confirmation:
-
 
             if (
                 pattern_valid
                 and
-                pa_confidence >= self.config.minimum_price_action_confidence
+                pa_confidence
+                >= self.config.minimum_price_action_confidence
             ):
 
                 score += 30
@@ -113,7 +148,45 @@ class StrategyEngine:
                     "Price action not confirmed"
                 )
 
+        # =====================================
+        # ENGULFING
+        # =====================================
 
+        if self.config.require_engulfing:
+
+            engulfing = getattr(
+                price_action,
+                "engulfing",
+                False
+            )
+
+            if not engulfing:
+
+                warnings.append(
+                    "Engulfing confirmation missing"
+                )
+
+                return StrategyResult(
+
+                    approved=False,
+
+                    score=min(
+                        score,
+                        100
+                    ),
+
+                    reasons=reasons,
+
+                    warnings=warnings,
+
+                    message=(
+                        "Required engulfing confirmation missing"
+                    )
+                )
+
+            reasons.append(
+                "Engulfing confirmed"
+            )
 
         # =====================================
         # MACD FILTER
@@ -121,13 +194,11 @@ class StrategyEngine:
 
         if self.config.use_macd_filter:
 
-
             macd_score = getattr(
                 macd,
                 "score",
                 0
             )
-
 
             macd_momentum = getattr(
                 macd,
@@ -135,8 +206,10 @@ class StrategyEngine:
                 False
             )
 
-
-            if macd_score >= self.config.minimum_macd_score:
+            if (
+                macd_score
+                >= self.config.minimum_macd_score
+            ):
 
                 score += 20
 
@@ -150,9 +223,7 @@ class StrategyEngine:
                     "MACD score weak"
                 )
 
-
             if self.config.require_macd_momentum:
-
 
                 if macd_momentum:
 
@@ -168,8 +239,6 @@ class StrategyEngine:
                         "MACD momentum missing"
                     )
 
-
-
         # =====================================
         # MARKET CONTEXT
         # =====================================
@@ -179,7 +248,6 @@ class StrategyEngine:
             "confidence",
             0
         )
-
 
         if context_confidence >= 70:
 
@@ -195,18 +263,19 @@ class StrategyEngine:
                 "Market context weak"
             )
 
-
-
         # =====================================
         # FINAL CHECK
         # =====================================
 
-        approved = (
-
-            score >= self.config.minimum_trade_quality
-
+        quality = min(
+            score,
+            100
         )
 
+        approved = (
+            quality
+            >= self.config.minimum_trade_quality
+        )
 
         if approved:
 
@@ -220,16 +289,11 @@ class StrategyEngine:
                 "Strategy conditions failed"
             )
 
-
-
         return StrategyResult(
 
             approved=approved,
 
-            score=min(
-                score,
-                100
-            ),
+            score=quality,
 
             reasons=reasons,
 
@@ -238,3 +302,27 @@ class StrategyEngine:
             message=message
 
         )
+
+    # =====================================
+    # NO TRADE
+    # =====================================
+
+    def no_trade(
+        self,
+        message
+    ):
+
+        return StrategyResult(
+
+            approved=False,
+
+            score=0,
+
+            reasons=[],
+
+            warnings=[message],
+
+            message=message
+
+        )
+```
