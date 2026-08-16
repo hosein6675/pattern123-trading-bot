@@ -20,7 +20,6 @@ class StructureResult:
 class StructureAnalyzer:
 
     def analyze(self, candles):
-
         if not candles or len(candles) < 30:
             return self.empty_result("Not enough candles")
 
@@ -28,7 +27,6 @@ class StructureAnalyzer:
         swing_lows = []
 
         for i in range(2, len(candles) - 2):
-
             try:
                 high = float(candles[i]["high"])
                 low = float(candles[i]["low"])
@@ -42,7 +40,6 @@ class StructureAnalyzer:
                 low_2 = float(candles[i - 2]["low"])
                 low_plus_1 = float(candles[i + 1]["low"])
                 low_plus_2 = float(candles[i + 2]["low"])
-
             except (KeyError, TypeError, ValueError):
                 continue
 
@@ -80,7 +77,6 @@ class StructureAnalyzer:
         quality = 0
 
         if len(swing_highs) >= 2 and len(swing_lows) >= 2:
-
             last_high = swing_highs[-1]["price"]
             prev_high = swing_highs[-2]["price"]
 
@@ -96,7 +92,6 @@ class StructureAnalyzer:
                 quality += 30
 
         if trend == "bullish" and swing_highs:
-
             current_high = max(
                 float(candles[-1]["high"]),
                 float(candles[-1]["close"]),
@@ -107,7 +102,6 @@ class StructureAnalyzer:
                 last_bos = swing_highs[-1]["price"]
 
         elif trend == "bearish" and swing_lows:
-
             current_low = min(
                 float(candles[-1]["low"]),
                 float(candles[-1]["close"]),
@@ -118,13 +112,11 @@ class StructureAnalyzer:
                 last_bos = swing_lows[-1]["price"]
 
         if trend == "bullish" and len(swing_lows) >= 2:
-
             if swing_lows[-1]["price"] < swing_lows[-2]["price"]:
                 choch = True
                 last_choch = swing_lows[-1]["price"]
 
         elif trend == "bearish" and len(swing_highs) >= 2:
-
             if swing_highs[-1]["price"] > swing_highs[-2]["price"]:
                 choch = True
                 last_choch = swing_highs[-1]["price"]
@@ -144,14 +136,12 @@ class StructureAnalyzer:
         quality = max(0, min(quality, 100))
 
         if trend == "bullish":
-
             if choch:
                 market_state = "bullish_warning"
             else:
                 market_state = "bullish"
 
         elif trend == "bearish":
-
             if choch:
                 market_state = "bearish_warning"
             else:
@@ -179,12 +169,10 @@ class StructureAnalyzer:
         )
 
     def get_impulse_leg(self, candles, trend):
-
         if not candles or len(candles) < 20:
             return {}
 
         try:
-
             if trend == "bullish":
                 start = float(candles[-20]["low"])
                 end = float(candles[-5]["high"])
@@ -207,12 +195,10 @@ class StructureAnalyzer:
             return {}
 
     def get_correction_leg(self, candles, trend):
-
         if not candles or len(candles) < 5:
             return {}
 
         try:
-
             start = float(candles[-5]["close"])
             end = float(candles[-1]["close"])
 
@@ -230,7 +216,6 @@ class StructureAnalyzer:
             return {}
 
     def empty_result(self, reason):
-
         return StructureResult(
             trend="unknown",
             swing_highs=[],
@@ -244,4 +229,4 @@ class StructureAnalyzer:
             structure_quality=0,
             market_state="no_data",
             description=reason,
-    )
+            )
