@@ -3,7 +3,7 @@ from dataclasses import dataclass
 @dataclass
 class StructureResult:
 
-```
+
 trend: str
 swing_highs: list
 swing_lows: list
@@ -16,15 +16,17 @@ correction_leg: dict
 structure_quality: int
 market_state: str
 description: str
-```
+
 
 class StructureAnalyzer:
 
-```
+
 def analyze(self, candles):
 
     if not candles or len(candles) < 30:
-        return self.empty_result("Not enough candles")
+        return self.empty_result(
+            "Not enough candles"
+        )
 
     swing_highs = []
     swing_lows = []
@@ -45,7 +47,11 @@ def analyze(self, candles):
             low_plus_1 = float(candles[i + 1]["low"])
             low_plus_2 = float(candles[i + 2]["low"])
 
-        except (KeyError, TypeError, ValueError):
+        except (
+            KeyError,
+            TypeError,
+            ValueError
+        ):
             continue
 
         if (
@@ -73,11 +79,16 @@ def analyze(self, candles):
     trend = "range"
     bos = False
     choch = False
+
     last_bos = 0.0
     last_choch = 0.0
+
     quality = 0
 
-    if len(swing_highs) >= 2 and len(swing_lows) >= 2:
+    if (
+        len(swing_highs) >= 2
+        and len(swing_lows) >= 2
+    ):
 
         last_high = swing_highs[-1]["price"]
         prev_high = swing_highs[-2]["price"]
@@ -85,11 +96,17 @@ def analyze(self, candles):
         last_low = swing_lows[-1]["price"]
         prev_low = swing_lows[-2]["price"]
 
-        if last_high > prev_high and last_low > prev_low:
+        if (
+            last_high > prev_high
+            and last_low > prev_low
+        ):
             trend = "bullish"
             quality += 30
 
-        elif last_high < prev_high and last_low < prev_low:
+        elif (
+            last_high < prev_high
+            and last_low < prev_low
+        ):
             trend = "bearish"
             quality += 30
 
@@ -101,8 +118,12 @@ def analyze(self, candles):
         )
 
         if current_high > swing_highs[-1]["price"]:
+
             bos = True
-            last_bos = swing_highs[-1]["price"]
+
+            last_bos = (
+                swing_highs[-1]["price"]
+            )
 
     elif trend == "bearish" and swing_lows:
 
@@ -112,20 +133,46 @@ def analyze(self, candles):
         )
 
         if current_low < swing_lows[-1]["price"]:
+
             bos = True
-            last_bos = swing_lows[-1]["price"]
 
-    if trend == "bullish" and len(swing_lows) >= 2:
+            last_bos = (
+                swing_lows[-1]["price"]
+            )
 
-        if swing_lows[-1]["price"] < swing_lows[-2]["price"]:
+    if (
+        trend == "bullish"
+        and len(swing_lows) >= 2
+    ):
+
+        if (
+            swing_lows[-1]["price"]
+            <
+            swing_lows[-2]["price"]
+        ):
+
             choch = True
-            last_choch = swing_lows[-1]["price"]
 
-    elif trend == "bearish" and len(swing_highs) >= 2:
+            last_choch = (
+                swing_lows[-1]["price"]
+            )
 
-        if swing_highs[-1]["price"] > swing_highs[-2]["price"]:
+    elif (
+        trend == "bearish"
+        and len(swing_highs) >= 2
+    ):
+
+        if (
+            swing_highs[-1]["price"]
+            >
+            swing_highs[-2]["price"]
+        ):
+
             choch = True
-            last_choch = swing_highs[-1]["price"]
+
+            last_choch = (
+                swing_highs[-1]["price"]
+            )
 
     if bos:
         quality += 25
@@ -139,44 +186,77 @@ def analyze(self, candles):
     if choch:
         quality -= 15
 
-    quality = max(0, min(quality, 100))
-
-    if trend == "bullish":
-        market_state = (
-            "bullish_warning"
-            if choch
-            else "bullish"
+    quality = max(
+        0,
+        min(
+            quality,
+            100
         )
-
-    elif trend == "bearish":
-        market_state = (
-            "bearish_warning"
-            if choch
-            else "bearish"
-        )
-
-    else:
-        market_state = "range"
-
-    impulse = self.get_impulse_leg(candles, trend)
-    correction = self.get_correction_leg(candles, trend)
-
-    return StructureResult(
-        trend=trend,
-        swing_highs=swing_highs,
-        swing_lows=swing_lows,
-        bos=bos,
-        choch=choch,
-        last_bos_level=last_bos,
-        last_choch_level=last_choch,
-        impulse_leg=impulse,
-        correction_leg=correction,
-        structure_quality=quality,
-        market_state=market_state,
-        description="Validated market structure analysis"
     )
 
-def get_impulse_leg(self, candles, trend):
+    if trend == "bullish":
+
+        if choch:
+            market_state = "bullish_warning"
+        else:
+            market_state = "bullish"
+
+    elif trend == "bearish":
+
+        if choch:
+            market_state = "bearish_warning"
+        else:
+            market_state = "bearish"
+
+    else:
+
+        market_state = "range"
+
+    impulse = self.get_impulse_leg(
+        candles,
+        trend
+    )
+
+    correction = self.get_correction_leg(
+        candles,
+        trend
+    )
+
+    return StructureResult(
+
+        trend=trend,
+
+        swing_highs=swing_highs,
+
+        swing_lows=swing_lows,
+
+        bos=bos,
+
+        choch=choch,
+
+        last_bos_level=last_bos,
+
+        last_choch_level=last_choch,
+
+        impulse_leg=impulse,
+
+        correction_leg=correction,
+
+        structure_quality=quality,
+
+        market_state=market_state,
+
+        description=(
+            "Validated market structure analysis"
+        )
+
+    )
+
+def get_impulse_leg(
+    self,
+    candles,
+    trend
+):
 
     if not candles or len(candles) < 20:
         return {}
@@ -184,63 +264,128 @@ def get_impulse_leg(self, candles, trend):
     try:
 
         if trend == "bullish":
-            start = float(candles[-20]["low"])
-            end = float(candles[-5]["high"])
+
+            start = float(
+                candles[-20]["low"]
+            )
+
+            end = float(
+                candles[-5]["high"]
+            )
 
         elif trend == "bearish":
-            start = float(candles[-20]["high"])
-            end = float(candles[-5]["low"])
+
+            start = float(
+                candles[-20]["high"]
+            )
+
+            end = float(
+                candles[-5]["low"]
+            )
 
         else:
-            start = float(candles[-20]["close"])
-            end = float(candles[-5]["close"])
+
+            start = float(
+                candles[-20]["close"]
+            )
+
+            end = float(
+                candles[-5]["close"]
+            )
 
         return {
+
             "start": start,
+
             "end": end,
+
             "direction": trend
+
         }
 
-    except (KeyError, TypeError, ValueError, IndexError):
+    except (
+        KeyError,
+        TypeError,
+        ValueError,
+        IndexError
+    ):
+
         return {}
 
-def get_correction_leg(self, candles, trend):
+def get_correction_leg(
+    self,
+    candles,
+    trend
+):
 
     if not candles or len(candles) < 5:
         return {}
 
     try:
 
-        start = float(candles[-5]["close"])
-        end = float(candles[-1]["close"])
+        start = float(
+            candles[-5]["close"]
+        )
+
+        end = float(
+            candles[-1]["close"]
+        )
 
         return {
+
             "start": start,
+
             "end": end,
+
             "direction": (
                 "correction"
-                if trend in ("bullish", "bearish")
+                if trend in (
+                    "bullish",
+                    "bearish"
+                )
                 else "unknown"
             )
+
         }
 
-    except (KeyError, TypeError, ValueError, IndexError):
+    except (
+        KeyError,
+        TypeError,
+        ValueError,
+        IndexError
+    ):
+
         return {}
 
-def empty_result(self, reason):
+def empty_result(
+    self,
+    reason
+):
 
     return StructureResult(
+
         trend="unknown",
+
         swing_highs=[],
+
         swing_lows=[],
+
         bos=False,
+
         choch=False,
+
         last_bos_level=0.0,
+
         last_choch_level=0.0,
+
         impulse_leg={},
+
         correction_leg={},
+
         structure_quality=0,
+
         market_state="no_data",
+
         description=reason
+
     )
-```
