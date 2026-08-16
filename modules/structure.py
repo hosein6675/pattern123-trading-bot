@@ -1,4 +1,4 @@
-```python
+
 from dataclasses import dataclass
 
 
@@ -600,4 +600,4 @@ class StructureAnalyzer:
             description=reason
 
         )
-```
+`
