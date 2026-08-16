@@ -3,7 +3,7 @@ from dataclasses import dataclass
 @dataclass
 class StructureResult:
 
-
+```
 trend: str
 swing_highs: list
 swing_lows: list
@@ -16,11 +16,11 @@ correction_leg: dict
 structure_quality: int
 market_state: str
 description: str
-
+```
 
 class StructureAnalyzer:
 
-
+```
 def analyze(self, candles):
 
     if not candles or len(candles) < 30:
@@ -389,3 +389,4 @@ def empty_result(
         description=reason
 
     )
+```
