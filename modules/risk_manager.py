@@ -169,8 +169,8 @@ def check(
 
     self.update_day(balance)
 
-    daily_drawdown = (
-        self.calculate_daily_drawdown(balance)
+    daily_drawdown = self.calculate_daily_drawdown(
+        balance
     )
 
     if (
