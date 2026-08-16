@@ -585,4 +585,3 @@ class TradingEngine:
             "decision": "NO_TRADE"
 
         }
-``
