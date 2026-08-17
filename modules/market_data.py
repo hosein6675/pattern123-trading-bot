@@ -47,12 +47,7 @@ def get_candles(self, symbol, timeframe, days=200):
         "message": "Demo market data",
     }
 
-def _generate_demo_candles(
-    self,
-    symbol,
-    timeframe,
-    count=200,
-):
+def _generate_demo_candles(self, symbol, timeframe, count=200):
     try:
         count = int(count)
     except (TypeError, ValueError):
@@ -79,9 +74,7 @@ def _generate_demo_candles(
     previous_close = base_price
 
     for i in range(count):
-        wave = math.sin(i / 9.0) * (
-            base_price * 0.0015
-        )
+        wave = math.sin(i / 9.0) * base_price * 0.0015
 
         trend = (
             (i / count)
@@ -140,7 +133,4 @@ def _base_price(self, symbol):
         "ETHUSD": 3000.00000,
     }
 
-    return demo_prices.get(
-        symbol,
-        100.00000,
-    )
+    return demo_prices.get(symbol, 100.00000)‌
