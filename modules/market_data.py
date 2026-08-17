@@ -9,14 +9,16 @@ def get_candles(self, symbol, timeframe, days=200):
             "message": "Symbol is required",
         }
 
-    if timeframe not in (
+    valid_timeframes = (
         "M1",
         "M5",
         "M15",
         "H1",
         "H4",
         "D1",
-    ):
+    )
+
+    if timeframe not in valid_timeframes:
         return {
             "status": "error",
             "candles": [],
@@ -47,7 +49,12 @@ def get_candles(self, symbol, timeframe, days=200):
         "message": "Demo market data",
     }
 
-def _generate_demo_candles(self, symbol, timeframe, count=200):
+def _generate_demo_candles(
+    self,
+    symbol,
+    timeframe,
+    count=200,
+):
     try:
         count = int(count)
     except (TypeError, ValueError):
@@ -57,14 +64,19 @@ def _generate_demo_candles(self, symbol, timeframe, count=200):
 
     base_price = self._base_price(symbol)
 
-    step_minutes = {
+    timeframe_minutes = {
         "M1": 1,
         "M5": 5,
         "M15": 15,
         "H1": 60,
         "H4": 240,
         "D1": 1440,
-    }.get(timeframe, 60)
+    }
+
+    step_minutes = timeframe_minutes.get(
+        timeframe,
+        60,
+    )
 
     start_time = datetime.utcnow() - timedelta(
         minutes=step_minutes * count
@@ -74,49 +86,47 @@ def _generate_demo_candles(self, symbol, timeframe, count=200):
     previous_close = base_price
 
     for i in range(count):
-        wave = math.sin(i / 9.0) * base_price * 0.0015
+        wave = math.sin(i / 9.0)
+        wave *= base_price * 0.0015
 
-        trend = (
-            (i / count)
-            * base_price
-            * 0.002
-        )
+        trend = (i / count)
+        trend *= base_price * 0.002
 
-        movement = wave + trend
-
+        close_price = base_price + wave + trend
         open_price = previous_close
-        close_price = base_price + movement
 
-        volatility = base_price * (
-            0.0008
-            + abs(math.sin(i / 5.0)) * 0.0005
+        volatility = base_price * 0.0008
+        volatility += (
+            abs(math.sin(i / 5.0))
+            * base_price
+            * 0.0005
         )
 
-        high_price = max(
-            open_price,
-            close_price,
-        ) + volatility
-
-        low_price = min(
-            open_price,
-            close_price,
-        ) - volatility
-
-        timestamp = start_time + timedelta(
-            minutes=step_minutes * i
+        high_price = (
+            max(open_price, close_price)
+            + volatility
         )
 
-        candles.append(
-            {
-                "time": timestamp.isoformat(),
-                "open": round(open_price, 5),
-                "high": round(high_price, 5),
-                "low": round(low_price, 5),
-                "close": round(close_price, 5),
-                "volume": 1000 + (i % 500),
-            }
+        low_price = (
+            min(open_price, close_price)
+            - volatility
         )
 
+        timestamp = (
+            start_time
+            + timedelta(minutes=step_minutes * i)
+        )
+
+        candle = {
+            "time": timestamp.isoformat(),
+            "open": round(open_price, 5),
+            "high": round(high_price, 5),
+            "low": round(low_price, 5),
+            "close": round(close_price, 5),
+            "volume": 1000 + (i % 500),
+        }
+
+        candles.append(candle)
         previous_close = close_price
 
     return candles
@@ -133,4 +143,7 @@ def _base_price(self, symbol):
         "ETHUSD": 3000.00000,
     }
 
-    return demo_prices.get(symbol, 100.00000
+    return demo_prices.get(
+        symbol,
+        100.00000,
+    )
