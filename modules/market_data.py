@@ -133,4 +133,4 @@ def _base_price(self, symbol):
         "ETHUSD": 3000.00000,
     }
 
-    return demo_prices.get(symbol, 100.00000)‌
+    return demo_prices.get(symbol, 100.00000
