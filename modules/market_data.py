@@ -1,177 +1,212 @@
-from dataclasses import dataclass
+```python
 from datetime import datetime, timedelta
-
-import MetaTrader5 as mt5
-import pandas as pd
-
-
-@dataclass
-class Candle:
-
-    symbol: str
-    timeframe: str
-    timestamp: str
-
-    open: float
-    high: float
-    low: float
-    close: float
-
-    volume: float = 0
-
-
-
-TIMEFRAME_MAP = {
-
-    "M1": mt5.TIMEFRAME_M1,
-    "M5": mt5.TIMEFRAME_M5,
-    "M15": mt5.TIMEFRAME_M15,
-
-    "H1": mt5.TIMEFRAME_H1,
-    "H4": mt5.TIMEFRAME_H4,
-
-    "D1": mt5.TIMEFRAME_D1
-
-}
-
+import math
 
 
 class MarketDataEngine:
 
-
     def __init__(self):
-
-        if not mt5.initialize():
-
-            raise Exception(
-                "MT5 connection failed"
-            )
-
-        self.provider = "mt5"
-
-
+        self.demo_mode = True
 
     def get_candles(
         self,
-        symbol: str,
-        timeframe: str,
-        days: int = 100
+        symbol,
+        timeframe,
+        days=200
     ):
+        """
+        Demo market-data provider.
 
+        MT5 is intentionally disabled in this version.
+        This class provides deterministic synthetic candles
+        so the TradingEngine can be tested on Render without
+        a broker connection.
+        """
 
-        if timeframe not in TIMEFRAME_MAP:
-
-            raise ValueError(
-                "Unsupported timeframe"
-            )
-
-
-        end = datetime.now()
-
-        start = end - timedelta(
-            days=days
-        )
-
-
-        rates = mt5.copy_rates_range(
-
-            symbol,
-
-            TIMEFRAME_MAP[timeframe],
-
-            start,
-
-            end
-
-        )
-
-
-        if rates is None:
-
+        if not symbol:
             return {
-
-                "symbol": symbol,
-                "timeframe": timeframe,
+                "status": "error",
                 "candles": [],
-                "count": 0,
-                "provider": self.provider,
-                "status": "no_data",
-                "created_at": str(datetime.utcnow())
-
+                "message": "Symbol is required",
             }
 
+        if timeframe not in (
+            "M1",
+            "M5",
+            "M15",
+            "H1",
+            "H4",
+            "D1",
+        ):
+            return {
+                "status": "error",
+                "candles": [],
+                "message": "Unsupported timeframe",
+            }
 
-        df = pd.DataFrame(
-            rates
+        try:
+            days = int(days)
+        except (TypeError, ValueError):
+            days = 200
+
+        if days <= 0:
+            days = 200
+
+        candles = self._generate_demo_candles(
+            symbol=symbol,
+            timeframe=timeframe,
+            count=max(200, days),
         )
 
+        return {
+            "status": "ready",
+            "symbol": symbol,
+            "timeframe": timeframe,
+            "candles": candles,
+            "source": "demo",
+            "demo_mode": True,
+            "message": "Demo market data",
+        }
+
+    def _generate_demo_candles(
+        self,
+        symbol,
+        timeframe,
+        count=200
+    ):
+        """
+        Generate deterministic OHLC candles.
+
+        No external broker, API, or MT5 connection is used.
+        """
+
+        try:
+            count = int(count)
+        except (TypeError, ValueError):
+            count = 200
+
+        count = max(count, 200)
+
+        base_price = self._base_price(symbol)
+
+        step_minutes = {
+            "M1": 1,
+            "M5": 5,
+            "M15": 15,
+            "H1": 60,
+            "H4": 240,
+            "D1": 1440,
+        }.get(timeframe, 60)
+
+        start_time = (
+            datetime.utcnow()
+            - timedelta(
+                minutes=step_minutes * count
+            )
+        )
 
         candles = []
 
+        previous_close = base_price
 
-        for _, row in df.iterrows():
+        for i in range(count):
 
-            candles.append({
+            wave = math.sin(i / 9.0) * (
+                base_price * 0.0015
+            )
 
-                "symbol": symbol,
+            trend = (
+                (i / count)
+                * base_price
+                * 0.002
+            )
 
-                "timeframe": timeframe,
+            movement = wave + trend
 
-                "timestamp":
-                    str(
-                        datetime.fromtimestamp(
-                            row["time"]
+            open_price = previous_close
+
+            close_price = (
+                base_price
+                + movement
+            )
+
+            volatility = (
+                base_price
+                * (
+                    0.0008
+                    + (
+                        abs(
+                            math.sin(i / 5.0)
                         )
+                        * 0.0005
+                    )
+                )
+            )
+
+            high_price = max(
+                open_price,
+                close_price,
+            ) + volatility
+
+            low_price = min(
+                open_price,
+                close_price,
+            ) - volatility
+
+            timestamp = (
+                start_time
+                + timedelta(
+                    minutes=step_minutes * i
+                )
+            )
+
+            candles.append(
+                {
+                    "time": timestamp.isoformat(),
+                    "open": round(
+                        open_price,
+                        5
                     ),
+                    "high": round(
+                        high_price,
+                        5
+                    ),
+                    "low": round(
+                        low_price,
+                        5
+                    ),
+                    "close": round(
+                        close_price,
+                        5
+                    ),
+                    "volume": 1000 + (i % 500),
+                }
+            )
 
-                "open":
-                    float(row["open"]),
+            previous_close = close_price
 
-                "high":
-                    float(row["high"]),
+        return candles
 
-                "low":
-                    float(row["low"]),
+    def _base_price(self, symbol):
+        """
+        Deterministic demo starting price.
 
-                "close":
-                    float(row["close"]),
+        This is NOT a real market price.
+        """
 
-                "volume":
-                    float(row["tick_volume"])
+        symbol = str(symbol).upper()
 
-            })
-
-
-
-        return {
-
-            "symbol": symbol,
-
-            "timeframe": timeframe,
-
-            "candles": candles,
-
-            "count": len(candles),
-
-            "provider": self.provider,
-
-            "status": "ready",
-
-            "created_at": str(datetime.utcnow())
-
+        demo_prices = {
+            "EURUSD": 1.10000,
+            "GBPUSD": 1.30000,
+            "USDJPY": 150.00000,
+            "XAUUSD": 2400.00000,
+            "BTCUSD": 60000.00000,
+            "ETHUSD": 3000.00000,
         }
 
-
-
-    def add_candle(
-        self,
-        candle: Candle
-    ):
-
-        return candle
-
-
-
-    def shutdown(self):
-
-        mt5.shutdown()
+        return demo_prices.get(
+            symbol,
+            100.00000,
+        )
+```
