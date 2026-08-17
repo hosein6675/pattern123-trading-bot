@@ -1,11 +1,3 @@
-title: market_data.py
-
-from datetime import datetime, timedelta
-import math
-
-class MarketDataEngine:
-
-```
 VALID_TIMEFRAMES = (
     "M1",
     "M5",
@@ -68,9 +60,9 @@ def get_candles(self, symbol, timeframe, days=200):
 
     try:
         candles = self._generate_demo_candles(
-            symbol=symbol,
-            timeframe=timeframe,
-            count=count,
+            symbol,
+            timeframe,
+            count,
         )
     except Exception as exc:
         return {
@@ -89,7 +81,12 @@ def get_candles(self, symbol, timeframe, days=200):
         "message": "Demo market data",
     }
 
-def _generate_demo_candles(self, symbol, timeframe, count=200):
+def _generate_demo_candles(
+    self,
+    symbol,
+    timeframe,
+    count=200,
+):
     try:
         count = int(count)
     except (TypeError, ValueError):
@@ -204,4 +201,3 @@ def get_status(self):
         "demo_mode": True,
         "provider": "internal_demo",
     }
-```
