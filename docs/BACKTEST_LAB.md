@@ -10,6 +10,10 @@ The Backtest Lab evaluates the existing strategy independently from optional CME
 - `observe`: collect and inspect Order Flow data without allowing it to influence decisions.
 - `order_flow`: explicitly opt in to Order Flow inputs for an A/B experiment.
 
+## Historical replay
+
+Historical events are replayed chronologically and deterministically. The replay engine does not manufacture missing ticks, Level 2 records, Delta values, latency, or fills. Provider- and venue-specific replay rules should be added only when reliable historical data is available.
+
 ## Execution realism
 
 Historical replay must keep execution assumptions explicit. The execution model supports separate inputs for spread, slippage, and commission. No cost is silently invented. Latency and fill behavior should be added as provider- or venue-specific replay rules once reliable historical data is available.
