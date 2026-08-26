@@ -10,6 +10,10 @@ The Backtest Lab evaluates the existing strategy independently from optional CME
 - `observe`: collect and inspect Order Flow data without allowing it to influence decisions.
 - `order_flow`: explicitly opt in to Order Flow inputs for an A/B experiment.
 
+## Execution realism
+
+Historical replay must keep execution assumptions explicit. The execution model supports separate inputs for spread, slippage, and commission. No cost is silently invented. Latency and fill behavior should be added as provider- or venue-specific replay rules once reliable historical data is available.
+
 ## Required comparisons
 
 For a valid experiment, use the same historical period, symbols, timeframe, execution assumptions, fees/spread model, and strategy configuration for both baseline and order-flow runs. Only the Order Flow input should change.
@@ -18,7 +22,7 @@ Compare at minimum:
 
 - trade count
 - win rate
-- net P&L
+- net P&L after explicit execution costs
 - maximum drawdown
 - expectancy / profit factor when implemented
 - out-of-sample performance
