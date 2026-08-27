@@ -1,3 +1,5 @@
+import pytest
+
 from modules.market_intelligence.backtest.engine import BacktestEngine
 from modules.market_intelligence.backtest.models import DataMode, TradeResult
 
@@ -13,7 +15,7 @@ def test_metrics_are_computed_without_order_flow_assumptions():
     assert metrics.trades == 3
     assert metrics.wins == 2
     assert metrics.losses == 1
-    assert metrics.win_rate_pct == 100 * 2 / 3
+    assert metrics.win_rate_pct == pytest.approx(100 * 2 / 3)
     assert metrics.net_pnl == 20
     assert metrics.max_drawdown == 5
 
