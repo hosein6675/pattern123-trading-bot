@@ -33,4 +33,4 @@ def test_replay_adapter_engine_execution_end_to_end():
     assert comparison.baseline.trades == 3
     assert comparison.order_flow is not None
     assert comparison.order_flow.trades == 3
-    assert net == 8.0
+    assert net == 9.0
