@@ -1,0 +1,6 @@
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+ignore = ["E722"]
+
+[tool.ruff.lint.per-file-ignores]
+"test_engine.py" = ["F841"]
