@@ -1,32 +1,28 @@
-def __init__(self):
-    self.connection = "demo"
+from __future__ import annotations
 
-def connect(self):
-    return {
-        "status": "connected",
-        "mode": self.connection,
-    }
+from dataclasses import dataclass, field
+import os
 
-def open_order(
-    self,
-    symbol,
-    direction,
-    volume,
-    stop_loss,
-    take_profit,
-):
-    return OrderResult(
-        success=True,
-        order_id="DEMO_ORDER",
-        message="Order created in demo mode",
+
+@dataclass
+class TradingConfig:
+    """Central runtime configuration with safe demo defaults."""
+
+    connection: str = field(default_factory=lambda: os.getenv("TRADING_MODE", "demo"))
+    timeframe: str = field(default_factory=lambda: os.getenv("DEFAULT_TIMEFRAME", "M15"))
+    daily_drawdown_limit: float = 5.0
+    max_open_positions: int = 5
+    allowed_symbols: set[str] = field(
+        default_factory=lambda: {"EURUSD", "GBPUSD", "USDJPY", "XAUUSD", "BTCUSD"}
     )
 
-def close_order(self, order_id):
-    return OrderResult(
-        success=True,
-        order_id=str(order_id),
-        message="Order closed",
-    )
+    def is_symbol_allowed(self, symbol: str) -> bool:
+        return str(symbol).upper() in self.allowed_symbols
 
-def get_positions(self):
-    return []
+    def connect(self) -> dict[str, str]:
+        return {"status": "connected", "mode": self.connection}
+
+
+active_config = TradingConfig()
+
+__all__ = ["TradingConfig", "active_config"]
