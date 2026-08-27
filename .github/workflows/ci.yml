@@ -48,7 +48,10 @@ jobs:
       - name: Run pytest with coverage
         env:
           PYTHONPATH: .
-        run: python -m pytest -q --cov=modules --cov-report=term-missing --cov-report=xml
+        run: |
+          python -m pytest -q --cov=modules --cov-report=term-missing --cov-report=xml
 
       - name: Lint with Ruff
-        run: python -m ruff check .
+        run: |
+          python -m ruff check --fix .
+          python -m ruff check .
