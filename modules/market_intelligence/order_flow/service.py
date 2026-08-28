@@ -1,38 +1,48 @@
-"""Service boundary for optional order-flow providers.
-
-This module intentionally contains no Pattern123, price-action, MACD, or
-trade-execution logic. Providers can be added later without coupling their
-market-data feed to the strategy engine.
-"""
+"""Provider-neutral service for optional order-flow observations."""
 
 from __future__ import annotations
 
 from collections.abc import Iterable
+from datetime import datetime
 from typing import Protocol
 
 from .models import OrderFlowSnapshot
 
 
 class OrderFlowProvider(Protocol):
-    """Adapter contract for CME/Level-2 data providers."""
+    """Adapter contract for CME/Level-2/Delta data sources."""
 
-    def snapshot(self, instrument: str) -> OrderFlowSnapshot: ...
+    def fetch(
+        self, instrument: str, since: datetime | None = None
+    ) -> Iterable[OrderFlowSnapshot]: ...
 
 
 class OrderFlowService:
-    """Provider-independent facade for the platform's order-flow data layer."""
+    """Expose order-flow data only when explicitly enabled by the caller."""
 
-    def __init__(self, providers: Iterable[OrderFlowProvider] = ()) -> None:
+    def __init__(self, providers: Iterable[OrderFlowProvider] = (), enabled: bool = False) -> None:
         self._providers = tuple(providers)
+        self._enabled = bool(enabled)
 
     @property
     def enabled(self) -> bool:
-        return bool(self._providers)
+        return self._enabled
 
-    def snapshots(self, instrument: str) -> tuple[OrderFlowSnapshot, ...]:
+    def set_enabled(self, enabled: bool) -> None:
+        self._enabled = bool(enabled)
+
+    def snapshots(
+        self, instrument: str, since: datetime | None = None
+    ) -> tuple[OrderFlowSnapshot, ...]:
         if not instrument.strip():
             raise ValueError("instrument must not be empty")
-        snapshots = tuple(provider.snapshot(instrument) for provider in self._providers)
+        if not self._enabled:
+            return ()
+        snapshots = tuple(
+            snapshot
+            for provider in self._providers
+            for snapshot in provider.fetch(instrument, since)
+        )
         for snapshot in snapshots:
             snapshot.validate()
         return snapshots
