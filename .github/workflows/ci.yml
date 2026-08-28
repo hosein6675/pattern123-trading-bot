@@ -1,6 +1,7 @@
 name: CI
 
 on:
+  workflow_dispatch:
   push:
     branches: [main, 'feature/**', 'fix/**', 'chore/**']
   pull_request:
@@ -49,9 +50,8 @@ jobs:
         env:
           PYTHONPATH: .
         run: |
-          python -m pytest -q --cov=modules --cov-report=term-missing --cov-report=xml
+          python -m pytest -q --cov=modules --cov=backtest --cov-report=term-missing --cov-report=xml
 
       - name: Lint with Ruff
         run: |
-          python -m ruff check --fix .
           python -m ruff check .
