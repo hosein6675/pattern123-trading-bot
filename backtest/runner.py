@@ -1,4 +1,4 @@
-"""Strategy-isolated backtest runner."""
+"""Strategy-isolated backtest runner with explicit context selection."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from datetime import datetime
 from typing import Any
 
 from .data_snapshot import BacktestSnapshot
+from .mode import BacktestMode, context_for
 
 
 @dataclass(frozen=True, slots=True)
@@ -19,10 +20,19 @@ class BacktestResult:
 
 
 class BacktestRunner:
-    """Run a strategy over ordered snapshots without mutating their context."""
+    """Run a strategy with an explicit, non-implicit market-data context."""
 
-    def __init__(self, strategy: Callable[[BacktestSnapshot], Any]) -> None:
+    def __init__(
+        self,
+        strategy: Callable[[dict[str, object]], Any],
+        mode: BacktestMode = BacktestMode.PATTERN_ONLY,
+    ) -> None:
         self._strategy = strategy
+        self._mode = mode
+
+    @property
+    def mode(self) -> BacktestMode:
+        return self._mode
 
     def run(
         self, snapshots: Iterable[BacktestSnapshot], as_of: datetime | None = None
@@ -35,6 +45,6 @@ class BacktestRunner:
                 raise ValueError("snapshots must be ordered by timestamp")
             if as_of is not None:
                 snapshot.with_context_until(as_of)
-            decisions.append(self._strategy(snapshot))
+            decisions.append(self._strategy(context_for(snapshot, self._mode)))
             previous = snapshot.timestamp
         return BacktestResult(tuple(decisions), len(ordered))
