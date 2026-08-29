@@ -20,7 +20,7 @@ class ModeReport:
 
 
 def build_report(results: Iterable[ModeResult]) -> tuple[ModeReport, ...]:
-    reports = []
+    reports: list[ModeReport] = []
     for item in results:
         numeric = tuple(
             value
