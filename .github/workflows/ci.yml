@@ -55,3 +55,13 @@ jobs:
       - name: Lint with Ruff
         run: |
           python -m ruff check .
+
+      - name: Validate workflow files
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import yaml
+          for path in Path('.github/workflows').glob('*.yml'):
+              yaml.safe_load(path.read_text())
+          print('workflow yaml: ok')
+          PY
