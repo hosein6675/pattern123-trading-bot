@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass
-from math import inf
 
 from .matrix import ModeResult
+from .metrics import max_drawdown, profit_factor, win_rate
 
 
 @dataclass(frozen=True, slots=True)
@@ -22,16 +22,19 @@ class ModeReport:
 def build_report(results: Iterable[ModeResult]) -> tuple[ModeReport, ...]:
     reports = []
     for item in results:
-        values = tuple(item.result.decisions)
-        numeric = tuple(v for v in values if isinstance(v, (int, float)) and not isinstance(v, bool))
-        gross_profit = sum(v for v in numeric if v > 0)
-        gross_loss = -sum(v for v in numeric if v < 0)
-        wins = sum(v > 0 for v in numeric)
-        equity = peak = drawdown = 0.0
-        for value in numeric:
-            equity += value
-            peak = max(peak, equity)
-            drawdown = max(drawdown, peak - equity)
-        profit_factor = inf if gross_loss == 0 and gross_profit > 0 else (gross_profit / gross_loss if gross_loss else 0.0)
-        reports.append(ModeReport(item.mode.value, item.result.snapshots_processed, len(values), wins / len(numeric) if numeric else 0.0, profit_factor, drawdown))
+        numeric = tuple(
+            value
+            for value in item.result.decisions
+            if isinstance(value, (int, float)) and not isinstance(value, bool)
+        )
+        reports.append(
+            ModeReport(
+                mode=item.mode.value,
+                snapshots=item.result.snapshots_processed,
+                decisions=len(item.result.decisions),
+                win_rate=win_rate(numeric),
+                profit_factor=profit_factor(numeric),
+                max_drawdown=max_drawdown(numeric),
+            )
+        )
     return tuple(reports)
