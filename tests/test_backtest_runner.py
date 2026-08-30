@@ -19,13 +19,14 @@ def snapshot(minutes: int) -> BacktestSnapshot:
     )
 
 
-def test_runner_passes_snapshot_unchanged_to_strategy():
+def test_runner_passes_isolated_snapshot_to_strategy():
     seen = []
     runner = BacktestRunner(lambda item: seen.append(item) or item.price)
     result = runner.run([snapshot(0), snapshot(1)])
     assert result.decisions == (100.0, 101.0)
-    assert seen[0].news_data == ("news",)
-    assert seen[0].order_flow_data == ("delta",)
+    assert seen[0].news_data == ()
+    assert seen[0].order_flow_data == ()
+    assert seen[0].pattern_data == {"pattern": "123"}
 
 
 def test_runner_rejects_out_of_order_snapshots():
