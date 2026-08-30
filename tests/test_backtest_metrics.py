@@ -11,7 +11,7 @@ def test_win_rate():
 
 
 def test_profit_factor():
-    assert profit_factor([2, -1, 3, -2]) == pytest.approx(1.25)
+    assert profit_factor([2, -1, 3, -2]) == pytest.approx(5 / 3)
     assert profit_factor([1, 2]) == inf
     assert profit_factor([]) == 0.0
 
