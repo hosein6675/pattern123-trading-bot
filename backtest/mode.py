@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from enum import StrEnum
 
 from .data_snapshot import BacktestSnapshot
@@ -27,4 +28,17 @@ def context_for(snapshot: BacktestSnapshot, mode: BacktestMode) -> dict[str, obj
             "news": snapshot.news_data,
             "order_flow": snapshot.order_flow_data,
         }
+    raise ValueError(f"unsupported backtest mode: {mode}")
+
+
+def isolated_snapshot(snapshot: BacktestSnapshot, mode: BacktestMode) -> BacktestSnapshot:
+    """Preserve the existing strategy API while removing unselected observations."""
+    if mode is BacktestMode.PATTERN_ONLY:
+        return replace(snapshot, news_data=(), order_flow_data=())
+    if mode is BacktestMode.NEWS_ONLY:
+        return replace(snapshot, pattern_data={}, order_flow_data=())
+    if mode is BacktestMode.ORDER_FLOW_ONLY:
+        return replace(snapshot, pattern_data={}, news_data=())
+    if mode is BacktestMode.COMBINED:
+        return snapshot
     raise ValueError(f"unsupported backtest mode: {mode}")
