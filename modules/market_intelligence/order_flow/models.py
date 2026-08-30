@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+from math import isfinite
 from typing import Optional
 
 
@@ -28,6 +29,12 @@ class OrderFlowSnapshot:
             raise ValueError("provider must not be empty")
         if not self.instrument.strip():
             raise ValueError("instrument must not be empty")
+        if self.timestamp.tzinfo is None:
+            raise ValueError("timestamp must be timezone-aware")
+        for name in ("bid", "ask", "bid_size", "ask_size", "delta", "cumulative_delta", "volume"):
+            value = getattr(self, name)
+            if value is not None and not isfinite(value):
+                raise ValueError(f"{name} must be finite")
         if self.bid is not None and self.ask is not None and self.bid > self.ask:
             raise ValueError("bid cannot exceed ask")
         for name in ("bid_size", "ask_size", "volume"):
