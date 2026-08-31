@@ -9,6 +9,9 @@ from .data_snapshot import BacktestSnapshot
 from .mode import BacktestMode
 from .runner import BacktestResult, BacktestRunner
 
+Strategy = Callable[[BacktestSnapshot], object]
+StrategyFactory = Callable[[BacktestMode], Strategy]
+
 
 @dataclass(frozen=True, slots=True)
 class ModeResult:
@@ -18,10 +21,10 @@ class ModeResult:
 
 def run_mode_matrix(
     snapshots: Sequence[BacktestSnapshot],
-    strategy_factory: Callable[[BacktestMode], Callable[[dict[str, object]], object]],
+    strategy_factory: StrategyFactory,
     modes: Sequence[BacktestMode] = tuple(BacktestMode),
 ) -> tuple[ModeResult, ...]:
-    """Run each requested mode independently over the same immutable snapshots."""
+    """Run each requested mode independently over immutable point-in-time snapshots."""
     return tuple(
         ModeResult(mode, BacktestRunner(strategy_factory(mode), mode).run(snapshots))
         for mode in modes
