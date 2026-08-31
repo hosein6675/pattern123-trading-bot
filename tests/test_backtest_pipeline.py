@@ -14,13 +14,15 @@ def test_csv_pipeline_runs_all_modes_and_reports(tmp_path):
     )
 
     def factory(mode):
-        def strategy(context):
-            assert list(context) == ({
-                BacktestMode.PATTERN_ONLY: "pattern",
-                BacktestMode.NEWS_ONLY: "news",
-                BacktestMode.ORDER_FLOW_ONLY: "order_flow",
-                BacktestMode.COMBINED: "combined",
-            }[mode],)
+        def strategy(snapshot):
+            if mode is BacktestMode.PATTERN_ONLY:
+                assert snapshot.news_data == () and snapshot.order_flow_data == ()
+            elif mode is BacktestMode.NEWS_ONLY:
+                assert snapshot.pattern_data == {} and snapshot.order_flow_data == ()
+            elif mode is BacktestMode.ORDER_FLOW_ONLY:
+                assert snapshot.pattern_data == {} and snapshot.news_data == ()
+            else:
+                assert snapshot.pattern_data and snapshot.news_data == () and snapshot.order_flow_data == ()
             return 1.0 if mode is not BacktestMode.NEWS_ONLY else -1.0
         return strategy
 
