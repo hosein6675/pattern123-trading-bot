@@ -23,5 +23,7 @@ def test_walk_forward_windows_never_overlap_train_and_test():
     snapshots = _data()
     windows = build_windows(snapshots, train_size=4, test_size=2)
     for window in windows:
-        assert not set(window.train).intersection(window.test)
-        assert max(s.timestamp for s in window.train) < min(s.timestamp for s in window.test)
+        train_times = {s.timestamp for s in window.train}
+        test_times = {s.timestamp for s in window.test}
+        assert train_times.isdisjoint(test_times)
+        assert max(train_times) < min(test_times)
