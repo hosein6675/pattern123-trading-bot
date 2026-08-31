@@ -8,7 +8,7 @@ from typing import Any
 
 from .csv_adapter import CsvPriceAdapter
 from .data_snapshot import BacktestSnapshot
-from .matrix import ModeResult, run_mode_matrix
+from .matrix import ModeResult, StrategyFactory, run_mode_matrix
 from .mode import BacktestMode
 from .report import ModeReport, build_report
 
@@ -17,7 +17,7 @@ def run_csv_backtest(
     path: str,
     start: datetime,
     end: datetime,
-    strategy_factory: Callable[[BacktestMode], Callable[[dict[str, Any]], Any]],
+    strategy_factory: StrategyFactory,
     modes: tuple[BacktestMode, ...] = tuple(BacktestMode),
 ) -> tuple[ModeResult, ...]:
     """Load point-in-time prices, create snapshots, and run isolated modes."""
@@ -33,7 +33,7 @@ def run_csv_report(
     path: str,
     start: datetime,
     end: datetime,
-    strategy_factory: Callable[[BacktestMode], Callable[[dict[str, Any]], Any]],
+    strategy_factory: StrategyFactory,
     modes: tuple[BacktestMode, ...] = tuple(BacktestMode),
 ) -> tuple[ModeReport, ...]:
     return build_report(run_csv_backtest(path, start, end, strategy_factory, modes))
