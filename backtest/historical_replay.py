@@ -8,8 +8,8 @@ from datetime import datetime
 from typing import Any
 
 from .data_snapshot import BacktestSnapshot
+from .data_quality import validate_snapshots
 from .runner import BacktestResult, BacktestRunner
-from .quality_gate import validate_snapshots
 from .mode import BacktestMode
 
 
