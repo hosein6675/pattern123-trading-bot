@@ -6,6 +6,8 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime
 
+from .data_snapshot import BacktestSnapshot
+
 
 @dataclass(frozen=True, slots=True)
 class DataQualityReport:
@@ -40,3 +42,18 @@ def validate_rows(rows: Iterable[dict], required: tuple[str, ...] = ("timestamp"
         seen.add(timestamp)
         previous = timestamp
     return DataQualityReport(count, ordered, duplicates, missing)
+
+
+def validate_snapshots(snapshots: Iterable[BacktestSnapshot]) -> None:
+    ordered = tuple(snapshots)
+    if not ordered:
+        raise ValueError("snapshots must not be empty")
+    previous: datetime | None = None
+    seen: set[datetime] = set()
+    for snapshot in ordered:
+        if previous is not None and snapshot.timestamp < previous:
+            raise ValueError("snapshots must be ordered by timestamp")
+        if snapshot.timestamp in seen:
+            raise ValueError("snapshot timestamps must be unique")
+        seen.add(snapshot.timestamp)
+        previous = snapshot.timestamp
