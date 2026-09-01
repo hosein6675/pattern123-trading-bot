@@ -7,7 +7,6 @@ be registered by the runtime integration layer before Level-2 can be enabled.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
 
 from .live_adapter import Level2Provider, LiveOrderFlowAdapter
 from .settings import OrderFlowSettings
