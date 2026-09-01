@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from datetime import datetime
-from typing import Any
 
 from .csv_adapter import CsvPriceAdapter
 from .data_snapshot import BacktestSnapshot
