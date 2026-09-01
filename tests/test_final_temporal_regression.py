@@ -29,4 +29,6 @@ def test_walk_forward_has_strict_train_test_boundary():
     assert windows
     for window in windows:
         assert window.train[-1].timestamp < window.test[0].timestamp
-        assert set(window.train).isdisjoint(window.test)
+        assert {snapshot.timestamp for snapshot in window.train}.isdisjoint(
+            snapshot.timestamp for snapshot in window.test
+        )
