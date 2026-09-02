@@ -16,6 +16,11 @@ class ExecutionCosts:
 
 @dataclass(frozen=True)
 class ExecutionModel:
+    """Deterministic execution-cost model for historical replay.
+
+    Costs are explicit inputs; the model never invents market conditions.
+    """
+
     default_costs: ExecutionCosts = ExecutionCosts()
 
     def net_pnl(self, gross_pnl: float, costs: ExecutionCosts | None = None) -> float:
