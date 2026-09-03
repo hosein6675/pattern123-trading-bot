@@ -18,40 +18,26 @@ class DemoBroker:
     def connect(self) -> dict[str, str]:
         return {"status": "connected", "mode": "demo"}
 
-    def open_order(
-        self,
-        symbol: str,
-        direction: str,
-        volume: float,
-        stop_loss: float,
-        take_profit: float,
-    ) -> OrderResult:
-        return OrderResult(
-            success=True,
-            order_id="DEMO_ORDER",
-            message="Order created in demo mode",
-        )
+    def open_order(self, symbol, direction, volume, stop_loss, take_profit):
+        return OrderResult(True, "DEMO_ORDER", "Order created in demo mode")
 
-    def close_order(self, order_id: str) -> OrderResult:
-        return OrderResult(
-            success=True,
-            order_id=str(order_id),
-            message="Order closed in demo mode",
-        )
+    def close_order(self, order_id):
+        return OrderResult(True, str(order_id), "Order closed in demo mode")
 
-    def get_positions(self) -> list[object]:
+    def get_positions(self):
         return []
 
-    def account_info(self) -> dict[str, object]:
-        return {
-            "status": "ready",
-            "mode": "demo",
-            "balance": 1000.0,
-            "equity": 1000.0,
-            "currency": "USD",
-        }
+    def account_info(self):
+        return {"status": "ready", "mode": "demo", "balance": 1000.0, "equity": 1000.0, "currency": "USD"}
 
-    def risk_per_lot(self, symbol: str, direction: str, entry: float, stop_loss: float) -> float:
+    def current_price(self, symbol):
+        prices = {"EURUSD": 1.1, "GBPUSD": 1.3, "USDJPY": 150.0, "XAUUSD": 2400.0, "BTCUSD": 60000.0}
+        return {"status": "ready", "symbol": symbol, "bid": prices.get(symbol, 100.0), "ask": prices.get(symbol, 100.0)}
+
+    def contract(self, symbol):
+        return {"status": "ready", "symbol": symbol, "volume_min": active_config.min_lot, "volume_max": active_config.max_lot, "volume_step": active_config.lot_step}
+
+    def risk_per_lot(self, symbol, direction, entry, stop_loss):
         distance = abs(float(entry) - float(stop_loss))
         return distance if distance > 0 else 0.0
 
@@ -59,70 +45,50 @@ class DemoBroker:
 class BrokerInterface:
     """Broker facade with fail-closed live/demonstration separation."""
 
-    def __init__(self) -> None:
+    def __init__(self):
         if active_config.mode == "live":
             from modules.mt5_broker import MT5Broker
-
             self.broker = MT5Broker()
         else:
             self.broker = DemoBroker()
 
     @property
-    def mode(self) -> str:
+    def mode(self):
         return active_config.mode
 
-    def connect(self) -> dict[str, object]:
+    def connect(self):
         return self.broker.connect()
 
-    def disconnect(self) -> None:
+    def disconnect(self):
         disconnect = getattr(self.broker, "disconnect", None)
         if disconnect is not None:
             disconnect()
 
-    def open_order(
-        self,
-        symbol: str,
-        direction: str,
-        volume: float,
-        stop_loss: float,
-        take_profit: float,
-    ) -> OrderResult:
-        return self.broker.open_order(
-            symbol=symbol,
-            direction=direction,
-            volume=volume,
-            stop_loss=stop_loss,
-            take_profit=take_profit,
-        )
+    def open_order(self, symbol, direction, volume, stop_loss, take_profit):
+        return self.broker.open_order(symbol, direction, volume, stop_loss, take_profit)
 
-    def close_order(self, order_id: str) -> OrderResult:
+    def close_order(self, order_id):
         return self.broker.close_order(order_id)
 
-    def get_positions(self) -> list[object]:
+    def get_positions(self):
         return self.broker.get_positions()
 
-    def account_info(self) -> dict[str, object]:
+    def account_info(self):
         method = getattr(self.broker, "account_info", None)
-        if method is None:
-            return {"status": "unavailable", "mode": self.mode}
-        return method()
+        return method() if method else {"status": "unavailable", "mode": self.mode}
 
-    def risk_per_lot(
-        self,
-        symbol: str,
-        direction: str,
-        entry: float,
-        stop_loss: float,
-    ) -> float:
+    def current_price(self, symbol):
+        method = getattr(self.broker, "current_price", None)
+        return method(symbol) if method else {"status": "unavailable", "symbol": symbol}
+
+    def contract(self, symbol):
+        method = getattr(self.broker, "symbol_info", None) or getattr(self.broker, "contract", None)
+        return method(symbol) if method else {"status": "unavailable", "symbol": symbol}
+
+    def risk_per_lot(self, symbol, direction, entry, stop_loss):
         method = getattr(self.broker, "risk_per_lot", None)
-        if method is None:
-            return 0.0
-        return float(method(symbol, direction, entry, stop_loss))
+        return float(method(symbol, direction, entry, stop_loss)) if method else 0.0
 
-    def status(self) -> dict[str, object]:
+    def status(self):
         connection = self.connect()
-        return {
-            "mode": self.mode,
-            "status": connection.get("status", "unknown"),
-            "message": connection.get("message", ""),
-        }
+        return {"mode": self.mode, "status": connection.get("status", "unknown"), "message": connection.get("message", "")}
