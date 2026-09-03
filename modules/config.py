@@ -18,6 +18,13 @@ def _int_env(name: str, default: int) -> int:
         return default
 
 
+def _bool_env(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
 @dataclass
 class TradingConfig:
     """Central runtime configuration with safe demo defaults."""
@@ -30,6 +37,9 @@ class TradingConfig:
     )
     mode: str = field(
         default_factory=lambda: os.getenv("TRADING_MODE", "demo").lower()
+    )
+    live_trading_enabled: bool = field(
+        default_factory=lambda: _bool_env("LIVE_TRADING_ENABLED", False)
     )
     symbol: str = field(
         default_factory=lambda: os.getenv("DEFAULT_SYMBOL", "EURUSD").upper()

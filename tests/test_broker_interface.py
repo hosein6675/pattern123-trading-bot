@@ -1,4 +1,4 @@
-from modules.broker_interface import BrokerInterface
+from modules.broker_interface import BrokerInterface, DisabledLiveBroker
 
 
 def test_demo_broker_is_safe_and_deterministic():
@@ -17,3 +17,13 @@ def test_demo_broker_is_safe_and_deterministic():
 
     assert broker.current_price("EURUSD")["ask"] == 1.1
     assert broker.contract("EURUSD")["volume_step"] == 0.01
+
+
+def test_disabled_live_broker_never_executes_orders():
+    broker = DisabledLiveBroker()
+    status = broker.connect()
+    order = broker.open_order("EURUSD", "buy", 0.01, 1.09, 1.13)
+
+    assert status["status"] == "disabled"
+    assert order.success is False
+    assert order.order_id == ""

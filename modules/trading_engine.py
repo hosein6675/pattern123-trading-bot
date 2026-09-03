@@ -2,6 +2,7 @@ from modules.structure import StructureAnalyzer
 from modules.price_action import PriceActionEngine
 from modules.macd_engine import MACDEngine
 from modules.risk_manager import RiskManager
+from modules.money_management import MoneyManagement
 from modules.journal import JournalEngine
 from modules.account_manager import AccountManager
 from modules.market_context import MarketContextAnalyzer
@@ -21,6 +22,7 @@ class TradingEngine:
         self.price_action = PriceActionEngine()
         self.macd = MACDEngine()
         self.risk = RiskManager()
+        self.money = MoneyManagement(self.risk)
         self.journal = JournalEngine()
         self.account = AccountManager()
         self.news = NewsFilter()
@@ -139,7 +141,9 @@ class TradingEngine:
             return {"success": False, "message": "Stop loss and take profit are required"}
         account = self._sync_account(); positions = self.get_open_positions()
         price = self.orders.broker.current_price(symbol) if hasattr(self.orders, "broker") else {}
-        entry = price.get("ask" if direction == "buy" else "bid") if isinstance(price, dict) else None
+        if not isinstance(price, dict) or price.get("status") != "ready":
+            return {"success": False, "message": "Broker price unavailable"}
+        entry = price.get("ask" if direction == "buy" else "bid")
         if entry is None:
             return {"success": False, "message": "Broker price unavailable"}
         entry = float(entry)
@@ -149,19 +153,23 @@ class TradingEngine:
             return {"success": False, "message": "Take profit is on the wrong side of entry"}
         contract = self.orders.broker.contract(symbol) if hasattr(self.orders, "broker") else {}
         risk_per_lot = self.orders.risk_per_lot(symbol, direction, entry, stop_loss)
-        risk = self.risk.check(
-            balance=account.balance, equity=account.equity, entry=entry, stop_loss=stop_loss,
-            quality=100, open_positions=len(positions), risk_per_lot=risk_per_lot,
+        plan = self.money.plan_order(
+            balance=account.balance,
+            equity=account.equity,
+            entry=entry,
+            stop_loss=stop_loss,
+            requested_volume=volume,
+            quality=100,
+            open_positions=len(positions),
             total_risk_percent=self._total_open_risk_percent(account.balance, positions),
+            risk_per_lot=risk_per_lot,
             min_lot=contract.get("volume_min") if isinstance(contract, dict) else None,
             max_lot=contract.get("volume_max") if isinstance(contract, dict) else None,
             lot_step=contract.get("volume_step") if isinstance(contract, dict) else None,
         )
-        if not risk.allowed:
-            return {"success": False, "message": risk.message, "risk": risk}
-        if volume > risk.lot_size + 1e-12:
-            return {"success": False, "message": "Requested volume exceeds risk-approved size", "approved_volume": risk.lot_size, "risk": risk}
-        return self.orders.execute_trade(symbol, direction, volume, stop_loss, take_profit)
+        if not plan.approved:
+            return {"success": False, "message": plan.message, "approved_volume": plan.approved_volume, "risk": plan.risk}
+        return self.orders.execute_trade(symbol, direction, plan.approved_volume, stop_loss, take_profit)
 
     def close_order(self, order_id):
         if not order_id:
