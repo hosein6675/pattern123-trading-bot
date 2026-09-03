@@ -34,6 +34,15 @@ class MT5Broker:
     Live execution is never simulated: SDK/terminal errors become failures.
     """
 
+    TIMEFRAME_MAP = {
+        "M1": "TIMEFRAME_M1",
+        "M5": "TIMEFRAME_M5",
+        "M15": "TIMEFRAME_M15",
+        "H1": "TIMEFRAME_H1",
+        "H4": "TIMEFRAME_H4",
+        "D1": "TIMEFRAME_D1",
+    }
+
     def __init__(self, settings=None):
         self.settings = settings or MT5Settings.from_env()
         self._mt5: Any = None
@@ -123,6 +132,30 @@ class MT5Broker:
         if tick is None:
             return {"status": "error", "symbol": symbol, "message": str(self._mt5.last_error())}
         return {"status": "ready", "symbol": symbol, "bid": float(tick.bid), "ask": float(tick.ask), "time": int(tick.time)}
+
+    def get_candles(self, symbol, timeframe, count=200):
+        if not self._ensure_connected():
+            return {"status": "error", "candles": [], "message": "MT5 connection unavailable"}
+        timeframe_key = self.TIMEFRAME_MAP.get(str(timeframe).upper())
+        if timeframe_key is None:
+            return {"status": "error", "candles": [], "message": "Unsupported timeframe"}
+        mt5_timeframe = getattr(self._mt5, timeframe_key)
+        rates = self._mt5.copy_rates_from_pos(symbol, mt5_timeframe, 0, int(count))
+        if rates is None:
+            return {"status": "error", "candles": [], "message": str(self._mt5.last_error())}
+        candles = [
+            {
+                "time": int(row["time"]),
+                "open": float(row["open"]),
+                "high": float(row["high"]),
+                "low": float(row["low"]),
+                "close": float(row["close"]),
+                "volume": int(row["tick_volume"]),
+            }
+            for row in rates
+        ]
+        candles.sort(key=lambda row: row["time"])
+        return {"status": "ready", "symbol": symbol, "timeframe": timeframe, "candles": candles, "source": "mt5", "demo_mode": False}
 
     def risk_per_lot(self, symbol, direction, entry, stop_loss):
         if not self._ensure_connected():
