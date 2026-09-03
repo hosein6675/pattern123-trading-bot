@@ -17,19 +17,16 @@ class OrderManager:
     def account_info(self):
         return self.broker.account_info()
 
-    def risk_per_lot(self, symbol, direction, entry, stop_loss):
-        return self.broker.risk_per_lot(
-            symbol, direction, entry, stop_loss
-        )
+    def current_price(self, symbol):
+        return self.broker.current_price(symbol)
 
-    def execute_trade(
-        self,
-        symbol,
-        direction,
-        volume,
-        stop_loss,
-        take_profit,
-    ):
+    def contract(self, symbol):
+        return self.broker.contract(symbol)
+
+    def risk_per_lot(self, symbol, direction, entry, stop_loss):
+        return self.broker.risk_per_lot(symbol, direction, entry, stop_loss)
+
+    def execute_trade(self, symbol, direction, volume, stop_loss, take_profit):
         return self.broker.open_order(
             symbol=symbol,
             direction=direction,
