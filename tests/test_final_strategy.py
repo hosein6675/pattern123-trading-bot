@@ -11,10 +11,10 @@ def candles_from_closes(closes):
 
 
 def test_structure_produces_swings_and_direction():
-    candles = []
-    values = [100, 101, 99, 102, 100, 104, 102, 106, 104, 108, 106, 110, 108, 112, 110, 114, 112, 116, 114, 118, 116, 120]
-    candles = candles_from_closes(values)
-    result = StructureAnalyzer().analyze(candles)
+    values = [100, 101, 102, 101, 100, 103, 104, 103, 102, 105, 106, 105,
+              104, 107, 108, 107, 106, 109, 110, 109, 108, 111, 112, 111,
+              110, 113, 114, 113, 112, 115]
+    result = StructureAnalyzer().analyze(candles_from_closes(values))
     assert len(result.swing_highs) >= 2
     assert len(result.swing_lows) >= 2
     assert result.trend in {"bullish", "bearish", "range"}
