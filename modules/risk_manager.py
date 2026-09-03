@@ -33,6 +33,7 @@ class RiskManager:
         self.current_daily_loss = 0.0
         self.consecutive_losses = 0
         self.day = datetime.now().date()
+        self.peak_equity = None
 
     def update_day(self, balance):
         today = datetime.now().date()
@@ -64,10 +65,17 @@ class RiskManager:
         elif pnl > 0:
             self.consecutive_losses = 0
 
-    def calculate_daily_drawdown(self, balance=0):
+    def calculate_daily_drawdown(self, balance=0, equity=None):
         if not self.start_day_balance or self.start_day_balance <= 0:
             return 0.0
-        return round(max(self.current_daily_loss / self.start_day_balance * 100, 0.0), 2)
+        realized = max(self.current_daily_loss / self.start_day_balance * 100, 0.0)
+        floating = 0.0
+        if equity is not None:
+            try:
+                floating = max((self.start_day_balance - float(equity)) / self.start_day_balance * 100, 0.0)
+            except (TypeError, ValueError):
+                floating = 0.0
+        return round(max(realized, floating), 2)
 
     def calculate_account_drawdown(self, balance, equity=None):
         if equity is None:
@@ -79,7 +87,11 @@ class RiskManager:
             return 0.0
         if balance <= 0:
             return 0.0
-        return round(max((balance - equity) / balance * 100, 0.0), 2)
+        if self.peak_equity is None:
+            self.peak_equity = max(balance, equity)
+        else:
+            self.peak_equity = max(self.peak_equity, balance, equity)
+        return round(max((self.peak_equity - equity) / self.peak_equity * 100, 0.0), 2)
 
     def calculate_risk_percent(self, quality):
         try:
@@ -169,7 +181,7 @@ class RiskManager:
         if loss_amount:
             self.register_loss(loss_amount)
         self.update_day(balance)
-        daily_drawdown = self.calculate_daily_drawdown(balance)
+        daily_drawdown = self.calculate_daily_drawdown(balance, equity)
         account_drawdown = self.calculate_account_drawdown(balance, equity)
 
         if daily_drawdown >= self.max_daily_drawdown_percent:
