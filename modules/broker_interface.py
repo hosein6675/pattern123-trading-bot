@@ -18,6 +18,9 @@ class DemoBroker:
     def connect(self):
         return {"status": "connected", "mode": "demo"}
 
+    def disconnect(self):
+        return None
+
     def open_order(self, symbol, direction, volume, stop_loss, take_profit):
         return OrderResult(True, "DEMO_ORDER", "Order created in demo mode")
 
@@ -43,13 +46,52 @@ class DemoBroker:
         return distance if distance > 0 else 0.0
 
 
+class DisabledLiveBroker:
+    """Fail-closed broker used until an operator explicitly enables live trading."""
+
+    def _error(self, message="Live trading is disabled"):
+        return {"status": "disabled", "mode": "live", "message": message}
+
+    def connect(self):
+        return self._error()
+
+    def disconnect(self):
+        return None
+
+    def open_order(self, symbol, direction, volume, stop_loss, take_profit):
+        return OrderResult(False, "", "Live trading is disabled")
+
+    def close_order(self, order_id):
+        return OrderResult(False, str(order_id), "Live trading is disabled")
+
+    def get_positions(self):
+        return []
+
+    def account_info(self):
+        return self._error()
+
+    def current_price(self, symbol):
+        return {**self._error(), "symbol": symbol}
+
+    def get_candles(self, symbol, timeframe, count=200):
+        return {**self._error(), "candles": [], "symbol": symbol, "timeframe": timeframe}
+
+    def contract(self, symbol):
+        return {**self._error(), "symbol": symbol}
+
+    def risk_per_lot(self, symbol, direction, entry, stop_loss):
+        return 0.0
+
+
 class BrokerInterface:
     """Broker facade with fail-closed live/demonstration separation."""
 
     def __init__(self):
-        if active_config.mode == "live":
+        if active_config.mode == "live" and active_config.live_trading_enabled:
             from modules.mt5_broker import MT5Broker
             self.broker = MT5Broker()
+        elif active_config.mode == "live":
+            self.broker = DisabledLiveBroker()
         else:
             self.broker = DemoBroker()
 
@@ -61,9 +103,7 @@ class BrokerInterface:
         return self.broker.connect()
 
     def disconnect(self):
-        disconnect = getattr(self.broker, "disconnect", None)
-        if disconnect is not None:
-            disconnect()
+        self.broker.disconnect()
 
     def open_order(self, symbol, direction, volume, stop_loss, take_profit):
         return self.broker.open_order(symbol, direction, volume, stop_loss, take_profit)
