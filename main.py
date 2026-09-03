@@ -50,6 +50,12 @@ async def health():
     return {"status": "online", "service": "pattern123-trading-bot", "mode": active_config.mode, "symbol": active_config.symbol}
 
 
+@app.get("/broker/status")
+async def broker_status():
+    """Return broker connectivity without placing an order."""
+    return trading_engine.orders.status()
+
+
 @app.post("/analyze")
 async def analyze_market(request: Request):
     data = await request.json()
@@ -82,12 +88,15 @@ async def dashboard():
 
 @app.post("/trade/test")
 async def test_trade():
+    """Demo-only order smoke test; live mode is explicitly blocked."""
+    if active_config.mode != "demo":
+        return {"ok": False, "error": "Demo trade endpoint is disabled in live mode"}
     result = trading_engine.execute_order(
         symbol=active_config.symbol,
         direction="buy",
         volume=0.01,
-        stop_loss=0,
-        take_profit=0,
+        stop_loss=1.0,
+        take_profit=1.2,
     )
     return {"ok": True, "order": result}
 
