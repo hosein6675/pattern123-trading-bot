@@ -3,50 +3,42 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from modules.account_manager import AccountManager
 from modules.broker_interface import BrokerInterface, OrderResult
 from modules.config import active_config
-from modules.money_management import MoneyManager, PositionPlan, RiskLimits
+from modules.risk_manager import RiskManager, RiskResult
 
 
 @dataclass(frozen=True)
 class LiveTradeDecision:
     approved: bool
     reason: str
-    plan: PositionPlan | None = None
+    risk: RiskResult | None = None
     result: OrderResult | None = None
 
 
 class LiveTradingService:
     """Fail-closed live-trading coordinator.
 
-    It connects only to the configured broker, synchronizes account state,
-    applies money-management gates, and sends an order only after admission.
+    It connects only to the configured broker, synchronizes the broker account,
+    applies the existing risk manager, and sends an order only after admission.
     No live market data or execution is simulated by this service.
     """
 
     def __init__(
         self,
         broker: BrokerInterface | None = None,
-        account: AccountManager | None = None,
-        money_manager: MoneyManager | None = None,
+        risk_manager: RiskManager | None = None,
     ):
         self.broker = broker or BrokerInterface()
-        self.account = account or AccountManager()
-        self.money_manager = money_manager or MoneyManager(
-            RiskLimits(
-                risk_per_trade_percent=active_config.risk_per_trade_percent,
-                daily_drawdown_limit=active_config.daily_drawdown_limit,
-                max_account_drawdown=active_config.max_account_drawdown,
-                max_open_positions=active_config.max_open_positions,
-                max_total_risk_percent=active_config.max_total_risk_percent,
-                max_consecutive_losses=active_config.max_consecutive_losses,
-            )
-        )
+        self.risk_manager = risk_manager or RiskManager()
 
     def connect(self) -> dict[str, Any]:
         if self.broker.mode != "live":
-            return {"status": "error", "mode": self.broker.mode, "message": "LiveTradingService requires TRADING_MODE=live"}
+            return {
+                "status": "error",
+                "mode": self.broker.mode,
+                "message": "LiveTradingService requires TRADING_MODE=live",
+            }
         return self.broker.connect()
 
     def snapshot(self) -> dict[str, Any]:
@@ -54,8 +46,11 @@ class LiveTradingService:
             return {"status": "error", "mode": self.broker.mode, "message": "Live broker is disabled"}
         account = self.broker.account_info()
         if account.get("status") not in {"ready", "connected"}:
-            return {"status": "error", "mode": "live", "message": account.get("message", "Broker account unavailable")}
-        self.account.sync_from_broker(account)
+            return {
+                "status": "error",
+                "mode": "live",
+                "message": account.get("message", "Broker account unavailable"),
+            }
         return {
             "status": "ready",
             "mode": "live",
@@ -71,8 +66,8 @@ class LiveTradingService:
         entry: float,
         stop_loss: float,
         take_profit: float,
+        quality: float = 100.0,
         current_risk_percent: float = 0.0,
-        consecutive_losses: int = 0,
     ) -> LiveTradeDecision:
         if self.broker.mode != "live":
             return LiveTradeDecision(False, "Live broker is disabled")
@@ -81,45 +76,63 @@ class LiveTradingService:
         state = self.snapshot()
         if state.get("status") != "ready":
             return LiveTradeDecision(False, state.get("message", "Broker unavailable"))
+        account = state["account"]
         contract = self.broker.contract(symbol)
         if contract.get("status") != "ready":
             return LiveTradeDecision(False, contract.get("message", "Symbol contract unavailable"))
         risk_per_lot = self.broker.risk_per_lot(symbol, direction, entry, stop_loss)
-        try:
-            plan = self.money_manager.plan(
-                direction=direction,
-                entry=entry,
-                stop_loss=stop_loss,
-                take_profit=take_profit,
-                equity=self.account.equity,
-                peak_equity=self.account.peak_balance,
-                daily_start_equity=self.account.daily_start_balance,
-                risk_per_lot=risk_per_lot,
-                volume_min=contract["volume_min"],
-                volume_max=contract["volume_max"],
-                volume_step=contract["volume_step"],
-                open_positions=len(state["positions"]),
-                current_risk_percent=current_risk_percent,
-                consecutive_losses=consecutive_losses,
-            )
-        except (RuntimeError, ValueError, KeyError) as exc:
-            return LiveTradeDecision(False, str(exc))
-        return LiveTradeDecision(True, "Trade admitted", plan)
+        risk = self.risk_manager.check(
+            balance=account["balance"],
+            equity=account.get("equity"),
+            entry=entry,
+            stop_loss=stop_loss,
+            quality=quality,
+            open_positions=len(state["positions"]),
+            risk_per_lot=risk_per_lot,
+            total_risk_percent=current_risk_percent,
+            min_lot=contract["volume_min"],
+            max_lot=contract["volume_max"],
+            lot_step=contract["volume_step"],
+        )
+        if not risk.allowed:
+            return LiveTradeDecision(False, risk.message, risk)
+        return LiveTradeDecision(True, "Risk approved", risk)
 
-    def execute_trade(self, decision: LiveTradeDecision, symbol: str) -> LiveTradeDecision:
-        if not decision.approved or decision.plan is None:
+    def execute_trade(self, decision: LiveTradeDecision, symbol: str, *, entry: float, stop_loss: float, take_profit: float) -> LiveTradeDecision:
+        if not decision.approved or decision.risk is None:
             return decision
-        plan = decision.plan
         result = self.broker.open_order(
             symbol=symbol,
-            direction=plan.direction,
-            volume=plan.volume,
-            stop_loss=plan.stop_loss,
-            take_profit=plan.take_profit,
+            direction="buy" if take_profit > entry else "sell",
+            volume=decision.risk.lot_size,
+            stop_loss=stop_loss,
+            take_profit=take_profit,
         )
         if not result.success:
-            return LiveTradeDecision(False, result.message, plan, result)
-        return LiveTradeDecision(True, result.message, plan, result)
+            return LiveTradeDecision(False, result.message, decision.risk, result)
+        return LiveTradeDecision(True, result.message, decision.risk, result)
+
+    def execute_directional_trade(
+        self,
+        decision: LiveTradeDecision,
+        *,
+        symbol: str,
+        direction: str,
+        stop_loss: float,
+        take_profit: float,
+    ) -> LiveTradeDecision:
+        if not decision.approved or decision.risk is None:
+            return decision
+        result = self.broker.open_order(
+            symbol=symbol,
+            direction=direction,
+            volume=decision.risk.lot_size,
+            stop_loss=stop_loss,
+            take_profit=take_profit,
+        )
+        if not result.success:
+            return LiveTradeDecision(False, result.message, decision.risk, result)
+        return LiveTradeDecision(True, result.message, decision.risk, result)
 
     def close_trade(self, order_id: str) -> OrderResult:
         if self.broker.mode != "live":
