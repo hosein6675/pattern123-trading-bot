@@ -15,7 +15,7 @@ class OrderResult:
 class DemoBroker:
     """Deterministic broker used only when TRADING_MODE=demo."""
 
-    def connect(self) -> dict[str, str]:
+    def connect(self):
         return {"status": "connected", "mode": "demo"}
 
     def open_order(self, symbol, direction, volume, stop_loss, take_profit):
@@ -32,7 +32,8 @@ class DemoBroker:
 
     def current_price(self, symbol):
         prices = {"EURUSD": 1.1, "GBPUSD": 1.3, "USDJPY": 150.0, "XAUUSD": 2400.0, "BTCUSD": 60000.0}
-        return {"status": "ready", "symbol": symbol, "bid": prices.get(symbol, 100.0), "ask": prices.get(symbol, 100.0)}
+        price = prices.get(symbol, 100.0)
+        return {"status": "ready", "symbol": symbol, "bid": price, "ask": price}
 
     def contract(self, symbol):
         return {"status": "ready", "symbol": symbol, "volume_min": active_config.min_lot, "volume_max": active_config.max_lot, "volume_step": active_config.lot_step}
@@ -80,6 +81,12 @@ class BrokerInterface:
     def current_price(self, symbol):
         method = getattr(self.broker, "current_price", None)
         return method(symbol) if method else {"status": "unavailable", "symbol": symbol}
+
+    def get_candles(self, symbol, timeframe, count=200):
+        method = getattr(self.broker, "get_candles", None)
+        if method is None:
+            return {"status": "unavailable", "candles": [], "message": "Broker has no live market-data adapter"}
+        return method(symbol, timeframe, count)
 
     def contract(self, symbol):
         method = getattr(self.broker, "symbol_info", None) or getattr(self.broker, "contract", None)
