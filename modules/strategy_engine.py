@@ -47,49 +47,56 @@ class StrategyEngine:
                 score += 25
                 reasons.append("Market structure confirmed")
             else:
-                warnings.append("Market structure not confirmed")
+                return self._result(False, score, score, "none", price_action, reasons,
+                                    ["Market structure not confirmed"], "Required market structure confirmation missing")
 
         if self.config.require_pattern_confirmation:
             if pattern_valid and pa_confidence >= self.config.minimum_price_action_confidence:
                 score += 30
                 reasons.append("Pattern123 price action confirmed")
             else:
-                warnings.append("Pattern123 confirmation below threshold")
+                return self._result(False, score, score, "none", price_action, reasons,
+                                    ["Pattern123 confirmation below threshold"], "Required Pattern123 confirmation missing")
 
         engulfing = bool(getattr(price_action, "engulfing", False))
         if self.config.require_engulfing and not engulfing:
             return self._result(False, score, score, "none", price_action, reasons,
-                                warnings + ["Engulfing confirmation missing"],
+                                ["Engulfing confirmation missing"],
                                 "Required engulfing confirmation missing")
         if engulfing:
             reasons.append("Engulfing confirmed")
 
         direction = self._direction(structure_trend, pa_direction)
         if direction == "none":
-            warnings.append("Structure and Pattern123 direction mismatch")
+            return self._result(False, score, score, "none", price_action, reasons,
+                                warnings + ["Structure and Pattern123 direction mismatch"],
+                                "Structure and Pattern123 direction mismatch")
 
         if self.config.use_macd_filter:
             macd_score = self._bounded_int(getattr(macd, "score", 0))
             macd_direction = self._macd_direction(macd)
-            if macd_score >= self.config.minimum_macd_score and macd_direction == direction and direction != "none":
-                score += 20
-                reasons.append("MACD confirms trade direction")
-            elif macd_score >= self.config.minimum_macd_score and direction == "none":
-                warnings.append("MACD direction cannot be evaluated without a trade direction")
-            else:
+            if macd_score < self.config.minimum_macd_score:
                 warnings.append("MACD confirmation below directional threshold")
+                return self._result(False, score, score, direction, price_action, reasons, warnings,
+                                    "MACD filter rejected setup")
+            if macd_direction != direction:
+                warnings.append("MACD direction conflicts with trade direction")
+                return self._result(False, score, score, direction, price_action, reasons, warnings,
+                                    "MACD direction conflict")
+            score += 20
+            reasons.append("MACD confirms trade direction")
             if self.config.require_macd_momentum:
-                momentum = bool(getattr(macd, "momentum_confirmation", False))
-                momentum_direction = self._macd_direction(macd)
-                if momentum and momentum_direction == direction and direction != "none":
+                if bool(getattr(macd, "momentum_confirmation", False)):
                     score += 10
                     reasons.append("MACD momentum confirms direction")
                 else:
-                    warnings.append("MACD momentum does not confirm direction")
+                    return self._result(False, score, score, direction, price_action, reasons,
+                                        warnings + ["MACD momentum does not confirm direction"],
+                                        "MACD momentum confirmation missing")
 
         context_confidence = self._bounded_int(getattr(market_context, "confidence", 0))
         context_trend = str(getattr(market_context, "trend", "unknown")).lower()
-        if context_confidence >= 70 and context_trend == structure_trend and structure_trend in {"bullish", "bearish"}:
+        if context_confidence >= 70 and context_trend == structure_trend:
             score += 10
             reasons.append("Multi-timeframe context aligned")
         else:
@@ -98,11 +105,12 @@ class StrategyEngine:
         if self.config.require_trendline_fan:
             fan_score = self._bounded_int(getattr(trendline_fan, "score", 0)) if trendline_fan else 0
             fan_direction = str(getattr(trendline_fan, "direction", "none")).lower() if trendline_fan else "none"
-            if fan_score >= self.config.minimum_trendline_score and fan_direction == direction and direction != "none":
-                score += 5
-                reasons.append("Trendline fan confirms direction")
-            else:
-                warnings.append("Trendline fan does not confirm direction")
+            if fan_score < self.config.minimum_trendline_score or fan_direction != direction:
+                return self._result(False, score, score, direction, price_action, reasons,
+                                    warnings + ["Trendline fan does not confirm direction"],
+                                    "Trendline fan confirmation missing")
+            score += 5
+            reasons.append("Trendline fan confirms direction")
 
         entry = self._finite_float(getattr(price_action, "entry", 0.0))
         stop_loss = self._finite_float(getattr(price_action, "stop_loss", 0.0))
@@ -110,23 +118,15 @@ class StrategyEngine:
         tp2 = self._finite_float(getattr(price_action, "tp2", 0.0))
         tp3 = self._finite_float(getattr(price_action, "tp3", 0.0))
         risk_reward = self._risk_reward(direction, entry, stop_loss, tp3 or tp2 or tp1)
-        if direction != "none" and risk_reward > 0:
-            if risk_reward >= self.config.risk_reward_ratio:
-                reasons.append(f"Risk/reward target >= {self.config.risk_reward_ratio:g}")
-            else:
-                warnings.append("Risk/reward below configured target")
+        if direction != "none" and risk_reward >= self.config.risk_reward_ratio:
+            reasons.append(f"Risk/reward target >= {self.config.risk_reward_ratio:g}")
+        elif direction != "none":
+            return self._result(False, score, score, direction, price_action, reasons,
+                                warnings + ["Risk/reward below configured target"],
+                                "Insufficient risk/reward")
 
         confidence = min(100, score + (5 if pa_confidence >= 80 else 0))
-        required_rr = risk_reward >= self.config.risk_reward_ratio if direction != "none" else False
-        approved = (
-            direction != "none"
-            and score >= self.config.minimum_trade_quality
-            and confidence >= self.config.minimum_trade_confidence
-            and required_rr
-        )
-        if not required_rr and direction != "none":
-            warnings.append("Trade rejected: insufficient risk/reward")
-
+        approved = score >= self.config.minimum_trade_quality and confidence >= self.config.minimum_trade_confidence
         return self._result(
             approved, score, confidence, direction, price_action, reasons, warnings,
             "Strategy conditions satisfied" if approved else "Strategy conditions failed",
