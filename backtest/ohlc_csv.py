@@ -24,8 +24,11 @@ def load_ohlc_csv(path: str | Path) -> tuple[OHLCRecord, ...]:
     source = Path(path)
     with source.open(newline="", encoding="utf-8") as handle:
         reader = csv.DictReader(handle)
+        fieldnames = reader.fieldnames or []
         required = {"timestamp", "open", "high", "low", "close"}
-        if not required.issubset(reader.fieldnames or set()):
+        if len(fieldnames) != len(set(fieldnames)):
+            raise ValueError("CSV header contains duplicate column names")
+        if not required.issubset(fieldnames):
             raise ValueError("CSV must contain timestamp, open, high, low, close columns")
 
         records: list[OHLCRecord] = []
@@ -41,7 +44,10 @@ def load_ohlc_csv(path: str | Path) -> tuple[OHLCRecord, ...]:
                 raise ValueError(f"timestamp at CSV line {number} must include timezone")
             if not all(isfinite(value) and value > 0 for value in values.values()):
                 raise ValueError(f"OHLC values at CSV line {number} must be finite and positive")
-            if not (values["low"] <= values["open"] <= values["high"] and values["low"] <= values["close"] <= values["high"]):
+            if not (
+                values["low"] <= values["open"] <= values["high"]
+                and values["low"] <= values["close"] <= values["high"]
+            ):
                 raise ValueError(f"OHLC range is invalid at CSV line {number}")
             if volume is not None and (not isfinite(volume) or volume < 0):
                 raise ValueError(f"volume at CSV line {number} must be finite and non-negative")
