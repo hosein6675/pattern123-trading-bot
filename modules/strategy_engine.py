@@ -123,7 +123,8 @@ class StrategyEngine:
         elif direction != "none":
             return self._result(False, score, score, direction, price_action, reasons,
                                 warnings + ["Risk/reward below configured target"],
-                                "Insufficient risk/reward")
+                                "Insufficient risk/reward", entry=entry, stop_loss=stop_loss,
+                                tp1=tp1, tp2=tp2, tp3=tp3, risk_reward=risk_reward)
 
         confidence = min(100, score + (5 if pa_confidence >= 80 else 0))
         approved = score >= self.config.minimum_trade_quality and confidence >= self.config.minimum_trade_confidence
