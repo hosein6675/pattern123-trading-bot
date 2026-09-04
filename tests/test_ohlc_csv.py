@@ -19,6 +19,12 @@ def test_loads_valid_timezone_aware_ohlc(tmp_path: Path):
     assert rows[1].volume == 12
 
 
+def test_rejects_duplicate_header(tmp_path: Path):
+    path = write_csv(tmp_path, "timestamp,open,high,low,close,close\n2026-01-01T00:00:00+00:00,100,105,99,103,104\n")
+    with pytest.raises(ValueError, match="duplicate column"):
+        load_ohlc_csv(path)
+
+
 def test_rejects_naive_timestamp(tmp_path: Path):
     path = write_csv(tmp_path, "timestamp,open,high,low,close\n2026-01-01T00:00:00,100,105,99,103\n")
     with pytest.raises(ValueError, match="timezone"):
