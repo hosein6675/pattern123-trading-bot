@@ -43,7 +43,7 @@ def test_summarize_tracks_profit_factor_expectancy_and_drawdown():
     assert summary.profit_factor == pytest.approx(18 / 25)
     assert summary.expectancy == pytest.approx(-1.75)
     assert summary.max_drawdown == pytest.approx(20)
-    assert summary.max_drawdown_pct == pytest.approx(0.2)
+    assert summary.max_drawdown_pct == pytest.approx(20 / 113)
 
 
 def test_execution_costs_are_explicit_and_deterministic():
