@@ -24,11 +24,18 @@ def _status(result: Any) -> str:
     return str(getattr(result, "status", "unknown"))
 
 
+def _call(engine: Any, symbol: str, timeframe: str, candles: list[dict[str, Any]] | None) -> Any:
+    # Preserve the original two-argument engine contract when no external candles are supplied.
+    if candles is None:
+        return engine.analyze_market(symbol, timeframe)
+    return engine.analyze_market(symbol, timeframe, candles)
+
+
 def analyze(engine: Any, symbol: str, selection: TelegramSelection, candles_by_timeframe: Mapping[str, list[dict[str, Any]]] | None = None) -> MultiTimeframeAnalysis:
     symbol = str(symbol).upper(); candles_by_timeframe = candles_by_timeframe or {}
-    structure = engine.analyze_market(symbol, selection.structure_timeframe, candles_by_timeframe.get(selection.structure_timeframe))
-    analysis = engine.analyze_market(symbol, selection.analysis_timeframe, candles_by_timeframe.get(selection.analysis_timeframe))
-    trigger = engine.analyze_market(symbol, selection.trigger_timeframe, candles_by_timeframe.get(selection.trigger_timeframe))
+    structure = _call(engine, symbol, selection.structure_timeframe, candles_by_timeframe.get(selection.structure_timeframe))
+    analysis = _call(engine, symbol, selection.analysis_timeframe, candles_by_timeframe.get(selection.analysis_timeframe))
+    trigger = _call(engine, symbol, selection.trigger_timeframe, candles_by_timeframe.get(selection.trigger_timeframe))
     warnings: list[str] = []
     for label, timeframe, result in (("ساختار", selection.structure_timeframe, structure), ("تحلیل", selection.analysis_timeframe, analysis), ("تریگر", selection.trigger_timeframe, trigger)):
         if _status(result) != "analysis_complete": warnings.append(f"{label} {timeframe}: {_status(result)}")
