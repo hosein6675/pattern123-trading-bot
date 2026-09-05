@@ -15,24 +15,29 @@ from modules.telegram_controls import (
     analysis_view_from_result,
     render_analysis,
 )
+from modules.telegram_permissions import TelegramPermissionManager
 from modules.trading_engine import TradingEngine
 
 SYMBOLS = tuple(sorted(active_config.allowed_symbols))
 
 
 class TelegramBot:
-    """Telegram control surface for multi-symbol, multi-timeframe analysis."""
+    """Telegram control surface with an explicit authorization boundary."""
 
-    def __init__(self, token: str, engine: TradingEngine | None = None):
+    def __init__(self, token: str, engine: TradingEngine | None = None, permissions: TelegramPermissionManager | None = None):
         self.token = token
         self.application = None
         self.engine = engine
+        self.permissions = permissions or TelegramPermissionManager()
         self._selections: dict[int, TelegramSelection] = {}
 
     def _selection(self, user_id: int) -> TelegramSelection:
         if user_id not in self._selections:
             self._selections[user_id] = TelegramSelection(symbols={active_config.symbol})
         return self._selections[user_id]
+
+    def _is_allowed(self, user_id: int, capability: str) -> bool:
+        return self.permissions.allowed(user_id, capability)
 
     @staticmethod
     def _button(label: str, callback: str) -> InlineKeyboardButton:
@@ -44,7 +49,7 @@ class TelegramBot:
             [self._button("🪙 نمادها", "symbols"), self._button("⏱ تایم‌فریم‌ها", "timeframes")],
             [self._button("📈 اجرای تحلیل", "analysis")],
             [self._button("📰 اخبار", "news"), self._button("💰 حساب", "account")],
-            [self._button("⚙️ تنظیمات", "settings")],
+            [self._button("🔐 دسترسی من", "permissions"), self._button("⚙️ تنظیمات", "settings")],
         ])
 
     def symbol_menu(self, selection: TelegramSelection) -> InlineKeyboardMarkup:
@@ -88,6 +93,8 @@ class TelegramBot:
 
         if data in {"home", "status"}:
             text, markup = self._status_text(selection), self.main_menu()
+        elif data == "permissions":
+            text, markup = self._permissions_text(user_id), self.main_menu()
         elif data == "symbols":
             text, markup = self._symbols_text(selection), self.symbol_menu(selection)
         elif data.startswith("sym:"):
@@ -114,7 +121,10 @@ class TelegramBot:
             selection.set_trigger_timeframe(data.rsplit(":", 1)[1])
             text, markup = self._timeframe_text(selection), self.timeframe_menu(selection)
         elif data == "analysis":
-            text, markup = await self._analysis_text(selection), self.main_menu()
+            if not self._is_allowed(user_id, "can_analyze"):
+                text, markup = "⛔ دسترسی اجرای تحلیل برای این کاربر فعال نیست.", self.main_menu()
+            else:
+                text, markup = await self._analysis_text(selection), self.main_menu()
         elif data == "news":
             enabled = bool(getattr(active_config, "trade_news", False))
             text, markup = f"📰 فیلتر خبر: {'فعال' if enabled else 'غیرفعال'}", self.main_menu()
@@ -134,6 +144,20 @@ class TelegramBot:
             f"🔎 تایم تحلیل: {selection.analysis_timeframe}\n"
             f"🎯 تایم تریگر: {selection.trigger_timeframe}\n"
             f"⚙️ حالت: {active_config.mode}"
+        )
+
+    def _permissions_text(self, user_id: int) -> str:
+        profile = self.permissions.profile_for(user_id)
+        yes_no = lambda value: "فعال" if value else "قفل"
+        return (
+            "🔐 دسترسی Telegram\n\n"
+            f"نقش: {profile.role.value}\n"
+            f"مشاهده: {yes_no(profile.can_view)}\n"
+            f"تحلیل: {yes_no(profile.can_analyze)}\n"
+            f"معامله: {yes_no(profile.can_trade)}\n"
+            f"مدیریت سیستم: {yes_no(profile.can_manage_system)}\n"
+            f"مدیریت Distribution: {yes_no(profile.can_manage_distribution)}\n"
+            f"داده حساس: {yes_no(profile.can_view_sensitive)}"
         )
 
     def _symbols_text(self, selection: TelegramSelection) -> str:
@@ -170,25 +194,15 @@ class TelegramBot:
     async def _analysis_text(self, selection: TelegramSelection) -> str:
         if self.engine is None:
             return "📈 موتور تحلیل به تلگرام متصل نشده است؛ نتیجه واقعی بدون داده بازار ساخته نمی‌شود."
-
         reports: list[str] = []
         for symbol in sorted(selection.symbols):
             try:
                 multi = analyze_multi_timeframe(self.engine, symbol, selection)
-                layers = (
-                    ("🏗 ساختار", multi.structure, selection.structure_timeframe),
-                    ("🔎 تحلیل", multi.analysis, selection.analysis_timeframe),
-                    ("🎯 تریگر", multi.trigger, selection.trigger_timeframe),
-                )
+                layers = (("🏗 ساختار", multi.structure, selection.structure_timeframe), ("🔎 تحلیل", multi.analysis, selection.analysis_timeframe), ("🎯 تریگر", multi.trigger, selection.trigger_timeframe))
                 layer_reports: list[str] = []
                 for label, result, timeframe in layers:
                     view = analysis_view_from_result(result, symbol=symbol, selection=selection)
-                    view = replace(
-                        view,
-                        structure_timeframe=timeframe,
-                        analysis_timeframe=timeframe,
-                        trigger_timeframe=timeframe,
-                    )
+                    view = replace(view, structure_timeframe=timeframe, analysis_timeframe=timeframe, trigger_timeframe=timeframe)
                     layer_reports.append(f"{label}\n{render_analysis(view)}")
                 if multi.warnings:
                     layer_reports.append("⚠️ وضعیت چندتایم‌فریمی\n" + "\n".join(f"• {item}" for item in multi.warnings))
