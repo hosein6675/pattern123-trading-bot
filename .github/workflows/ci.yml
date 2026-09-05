@@ -3,7 +3,7 @@ name: CI
 on:
   workflow_dispatch:
   push:
-    branches: [main, 'feature/**', 'fix/**', 'chore/**', 'ci/**']
+    branches: [main, 'feature/**', 'feat/**', 'fix/**', 'chore/**', 'ci/**']
   pull_request:
     branches: [main]
 

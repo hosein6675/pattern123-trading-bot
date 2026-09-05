@@ -18,6 +18,19 @@ def _int_env(name: str, default: int) -> int:
         return default
 
 
+def _int_set_env(name: str) -> set[int]:
+    values: set[int] = set()
+    for item in os.getenv(name, "").split(","):
+        item = item.strip()
+        if not item:
+            continue
+        try:
+            values.add(int(item))
+        except ValueError:
+            continue
+    return values
+
+
 def _bool_env(name: str, default: bool = False) -> bool:
     raw = os.getenv(name)
     if raw is None:
@@ -29,47 +42,21 @@ def _bool_env(name: str, default: bool = False) -> bool:
 class TradingConfig:
     """Central runtime configuration with safe demo defaults."""
 
-    connection: str = field(
-        default_factory=lambda: os.getenv("TRADING_MODE", "demo").lower()
-    )
-    market: str = field(
-        default_factory=lambda: os.getenv("MARKET", "forex").lower()
-    )
-    mode: str = field(
-        default_factory=lambda: os.getenv("TRADING_MODE", "demo").lower()
-    )
-    live_trading_enabled: bool = field(
-        default_factory=lambda: _bool_env("LIVE_TRADING_ENABLED", False)
-    )
-    symbol: str = field(
-        default_factory=lambda: os.getenv("DEFAULT_SYMBOL", "EURUSD").upper()
-    )
-    timeframe: str = field(
-        default_factory=lambda: os.getenv("DEFAULT_TIMEFRAME", "M15").upper()
-    )
+    connection: str = field(default_factory=lambda: os.getenv("TRADING_MODE", "demo").lower())
+    market: str = field(default_factory=lambda: os.getenv("MARKET", "forex").lower())
+    mode: str = field(default_factory=lambda: os.getenv("TRADING_MODE", "demo").lower())
+    live_trading_enabled: bool = field(default_factory=lambda: _bool_env("LIVE_TRADING_ENABLED", False))
+    symbol: str = field(default_factory=lambda: os.getenv("DEFAULT_SYMBOL", "EURUSD").upper())
+    timeframe: str = field(default_factory=lambda: os.getenv("DEFAULT_TIMEFRAME", "M15").upper())
 
     # Money-management guardrails.
-    risk_per_trade_percent: float = field(
-        default_factory=lambda: _float_env("RISK_PER_TRADE_PERCENT", 1.0)
-    )
-    daily_drawdown_limit: float = field(
-        default_factory=lambda: _float_env("DAILY_DRAWDOWN_LIMIT", 5.0)
-    )
-    max_account_drawdown: float = field(
-        default_factory=lambda: _float_env("MAX_ACCOUNT_DRAWDOWN_PERCENT", 20.0)
-    )
-    max_open_positions: int = field(
-        default_factory=lambda: _int_env("MAX_OPEN_POSITIONS", 5)
-    )
-    max_total_risk_percent: float = field(
-        default_factory=lambda: _float_env("MAX_TOTAL_RISK_PERCENT", 3.0)
-    )
-    max_consecutive_losses: int = field(
-        default_factory=lambda: _int_env("MAX_CONSECUTIVE_LOSSES", 3)
-    )
+    risk_per_trade_percent: float = field(default_factory=lambda: _float_env("RISK_PER_TRADE_PERCENT", 1.0))
+    daily_drawdown_limit: float = field(default_factory=lambda: _float_env("DAILY_DRAWDOWN_LIMIT", 5.0))
+    max_account_drawdown: float = field(default_factory=lambda: _float_env("MAX_ACCOUNT_DRAWDOWN_PERCENT", 20.0))
+    max_open_positions: int = field(default_factory=lambda: _int_env("MAX_OPEN_POSITIONS", 5))
+    max_total_risk_percent: float = field(default_factory=lambda: _float_env("MAX_TOTAL_RISK_PERCENT", 3.0))
+    max_consecutive_losses: int = field(default_factory=lambda: _int_env("MAX_CONSECUTIVE_LOSSES", 3))
 
-    # Broker/position constraints. These are generic and may be overridden by
-    # a live broker's symbol contract before an order is sent.
     min_lot: float = field(default_factory=lambda: _float_env("MIN_LOT", 0.01))
     max_lot: float = field(default_factory=lambda: _float_env("MAX_LOT", 100.0))
     lot_step: float = field(default_factory=lambda: _float_env("LOT_STEP", 0.01))
@@ -77,13 +64,14 @@ class TradingConfig:
     allowed_symbols: set[str] = field(
         default_factory=lambda: {
             item.strip().upper()
-            for item in os.getenv(
-                "ALLOWED_SYMBOLS",
-                "EURUSD,GBPUSD,USDJPY,XAUUSD,BTCUSD",
-            ).split(",")
+            for item in os.getenv("ALLOWED_SYMBOLS", "EURUSD,GBPUSD,USDJPY,XAUUSD,BTCUSD").split(",")
             if item.strip()
         }
     )
+
+    # Telegram authorization. Empty lists are intentionally non-privileged.
+    telegram_admin_ids: set[int] = field(default_factory=lambda: _int_set_env("TELEGRAM_ADMIN_IDS"))
+    telegram_trader_ids: set[int] = field(default_factory=lambda: _int_set_env("TELEGRAM_TRADER_IDS"))
 
     def is_symbol_allowed(self, symbol: str) -> bool:
         return str(symbol).upper() in self.allowed_symbols
