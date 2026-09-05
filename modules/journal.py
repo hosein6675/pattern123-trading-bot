@@ -25,6 +25,8 @@ class TradeRecord:
     analysis: str
     trade_id: str | None = None
     broker_order_id: str | None = None
+    broker_deal_id: str | None = None
+    broker_position_id: str | None = None
     positive_factors: list[str] = field(default_factory=list)
     negative_factors: list[str] = field(default_factory=list)
     risk_percent: float = 0.0
@@ -36,7 +38,7 @@ class TradeRecord:
 
 
 class JournalEngine:
-    """Persistent trade journal with lifecycle updates and batch analytics."""
+    """Persistent trade journal with broker lifecycle correlation."""
 
     def __init__(self, db_path: str | Path = "data/journal.sqlite3"):
         self.db_path = Path(db_path)
@@ -76,9 +78,10 @@ class JournalEngine:
     def create_trade(self, symbol, timeframe, direction, entry_price, exit_price=None,
                      stop_loss=0.0, take_profit=0.0, result="OPEN", profit_loss=0.0,
                      reason="", analysis="", entry_time=None, exit_time=None,
-                     broker_order_id=None, positive_factors=None, negative_factors=None,
-                     risk_percent=0.0, reward_risk=0.0, strategy_version="Pattern123 V1",
-                     market_context="", mistakes=None, ai_review=""):
+                     broker_order_id=None, broker_deal_id=None, broker_position_id=None,
+                     positive_factors=None, negative_factors=None, risk_percent=0.0,
+                     reward_risk=0.0, strategy_version="Pattern123 V1", market_context="",
+                     mistakes=None, ai_review=""):
         trade = TradeRecord(
             symbol=str(symbol).upper(), timeframe=str(timeframe).upper(), direction=str(direction).lower(),
             entry_price=float(entry_price), exit_price=None if exit_price is None else float(exit_price),
@@ -86,6 +89,8 @@ class JournalEngine:
             entry_time=entry_time or self._now(), exit_time=exit_time,
             result=str(result).upper(), profit_loss=float(profit_loss), reason=str(reason), analysis=str(analysis),
             broker_order_id=None if broker_order_id is None else str(broker_order_id),
+            broker_deal_id=None if broker_deal_id is None else str(broker_deal_id),
+            broker_position_id=None if broker_position_id is None else str(broker_position_id),
             positive_factors=list(positive_factors or []), negative_factors=list(negative_factors or []),
             risk_percent=float(risk_percent), reward_risk=float(reward_risk), strategy_version=str(strategy_version),
             market_context=str(market_context), mistakes=list(mistakes or []), ai_review=str(ai_review),
@@ -110,6 +115,20 @@ class JournalEngine:
         wanted = str(broker_order_id)
         for trade in self.get_history():
             if trade.broker_order_id == wanted:
+                return trade
+        return None
+
+    def find_by_broker_position(self, broker_position_id: str | int) -> TradeRecord | None:
+        wanted = str(broker_position_id)
+        for trade in self.get_history():
+            if trade.broker_position_id == wanted:
+                return trade
+        return None
+
+    def find_by_broker_deal(self, broker_deal_id: str | int) -> TradeRecord | None:
+        wanted = str(broker_deal_id)
+        for trade in self.get_history():
+            if trade.broker_deal_id == wanted:
                 return trade
         return None
 
