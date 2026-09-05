@@ -17,11 +17,9 @@ from modules.trendline_fan import TrendlineFanAnalyzer
 
 class TradingEngine:
     def __init__(self):
-        self.context = MarketContextAnalyzer(); self.structure = StructureAnalyzer()
-        self.price_action = PriceActionEngine(); self.macd = MACDEngine(); self.risk = RiskManager()
-        self.money = MoneyManagement(self.risk); self.journal = JournalEngine(); self.account = AccountManager()
-        self.news = NewsFilter(); self.orders = OrderManager(); self.market_data = MarketDataEngine()
-        self.decision = DecisionEngine(); self.strategy = StrategyEngine(); self.trendline_fan = TrendlineFanAnalyzer()
+        self.context = MarketContextAnalyzer(); self.structure = StructureAnalyzer(); self.price_action = PriceActionEngine(); self.macd = MACDEngine()
+        self.risk = RiskManager(); self.money = MoneyManagement(self.risk); self.journal = JournalEngine(); self.account = AccountManager(); self.news = NewsFilter(); self.orders = OrderManager(); self.market_data = MarketDataEngine(); self.decision = DecisionEngine(); self.strategy = StrategyEngine(); self.trendline_fan = TrendlineFanAnalyzer()
+        self.system_control = None
 
     def _sync_account(self):
         snapshot = self.orders.account_info(); self.account.sync_from_broker(snapshot); return self.account.get_account()
@@ -37,15 +35,10 @@ class TradingEngine:
         if not candles or len(candles) < 50: return self.no_trade(symbol, timeframe, account, "Not enough candles")
         news = self.news.check_news(symbol)
         if news is not None and not getattr(news, "allow_trade", True): return self.no_trade(symbol, timeframe, account, "News blocked trade")
-        context = self.context.analyze(candles, symbol); structure = self.structure.analyze(candles)
-        price_action = self.price_action.analyze(structure, candles); macd = self.macd.analyze(candles)
-        trendline_fan = self.trendline_fan.analyze(structure, candles)
+        context = self.context.analyze(candles, symbol); structure = self.structure.analyze(candles); price_action = self.price_action.analyze(structure, candles); macd = self.macd.analyze(candles); trendline_fan = self.trendline_fan.analyze(structure, candles)
         strategy_result = self.strategy.evaluate(structure=structure, price_action=price_action, macd=macd, market_context=context, trendline_fan=trendline_fan, timeframe=timeframe)
-        if not strategy_result.approved:
-            return {"symbol": symbol, "timeframe": timeframe, "status": "strategy_rejected", "account": account, "market_context": context, "structure": structure, "price_action": price_action, "macd": macd, "trendline_fan": trendline_fan, "strategy": strategy_result, "news": news, "decision": "NO_TRADE", "open_positions": len(self.get_open_positions())}
-        decision = self.decision.analyze(structure=structure, price_action=price_action, macd=macd, market_context=context, news=news)
-        positions = self.get_open_positions(); entry = float(getattr(price_action, "entry", 0) or 0); stop_loss = float(getattr(price_action, "stop_loss", 0) or 0)
-        direction = getattr(decision, "direction", "none")
+        if not strategy_result.approved: return {"symbol": symbol, "timeframe": timeframe, "status": "strategy_rejected", "account": account, "market_context": context, "structure": structure, "price_action": price_action, "macd": macd, "trendline_fan": trendline_fan, "strategy": strategy_result, "news": news, "decision": "NO_TRADE", "open_positions": len(self.get_open_positions())}
+        decision = self.decision.analyze(structure=structure, price_action=price_action, macd=macd, market_context=context, news=news); positions = self.get_open_positions(); entry = float(getattr(price_action, "entry", 0) or 0); stop_loss = float(getattr(price_action, "stop_loss", 0) or 0); direction = getattr(decision, "direction", "none")
         risk_per_lot = self.orders.risk_per_lot(symbol, direction, entry, stop_loss) if direction in ("buy", "sell") else 0.0
         risk = self.risk.check(balance=account.balance, equity=account.equity, entry=entry, stop_loss=stop_loss, quality=getattr(decision, "quality", 0), open_positions=len(positions), risk_per_lot=risk_per_lot, total_risk_percent=self._total_open_risk_percent(account.balance, positions))
         final_decision = self.decision.analyze(structure=structure, price_action=price_action, macd=macd, market_context=context, news=news, risk=risk)
@@ -66,6 +59,7 @@ class TradingEngine:
         return round(total, 4)
 
     def execute_order(self, symbol, direction, volume, stop_loss, take_profit, timeframe=None, reason="Telegram/manual", analysis=""):
+        if self.system_control is not None and not self.system_control.can_open_trade(): return {"success": False, "message": "Trading is blocked by system control"}
         symbol = str(symbol).upper(); direction = str(direction).lower()
         try: volume, stop_loss, take_profit = float(volume), float(stop_loss), float(take_profit)
         except (TypeError, ValueError): return {"success": False, "message": "Invalid numeric order parameters"}
@@ -84,26 +78,21 @@ class TradingEngine:
         if not plan.approved: return {"success": False, "message": plan.message, "approved_volume": plan.approved_volume, "risk": plan.risk}
         result = self.orders.execute_trade(symbol, direction, plan.approved_volume, stop_loss, take_profit)
         if result.success:
-            rr = abs(take_profit - entry) / max(abs(entry - stop_loss), 1e-12)
-            record = self.journal.create_trade(symbol, timeframe or active_config.timeframe, direction, entry, None, stop_loss, take_profit, "OPEN", 0.0, reason, analysis, broker_order_id=result.order_id, risk_percent=getattr(plan.risk, "risk_percent", 0.0), reward_risk=rr)
+            rr = abs(take_profit - entry) / max(abs(entry - stop_loss), 1e-12); record = self.journal.create_trade(symbol, timeframe or active_config.timeframe, direction, entry, None, stop_loss, take_profit, "OPEN", 0.0, reason, analysis, broker_order_id=result.order_id, risk_percent=getattr(plan.risk, "risk_percent", 0.0), reward_risk=rr)
             return {"success": True, "order_id": result.order_id, "message": result.message, "journal_id": record.trade_id}
         return result
 
     def close_order(self, order_id):
         if not order_id: return {"success": False, "message": "Invalid order id"}
-        positions = self.get_open_positions(); position = next((p for p in positions if str(p.get("ticket")) == str(order_id)), None)
-        result = self.orders.close_trade(order_id)
+        positions = self.get_open_positions(); position = next((p for p in positions if str(p.get("ticket")) == str(order_id)), None); result = self.orders.close_trade(order_id)
         if getattr(result, "success", False):
             record = self.journal.find_by_broker_order(order_id)
             if record:
-                exit_price = float(position.get("price_open", record.entry_price)) if position else record.entry_price
-                pnl = float(position.get("profit", 0)) if position else 0.0
+                exit_price = float(position.get("price_open", record.entry_price)) if position else record.entry_price; pnl = float(position.get("profit", 0)) if position else 0.0
                 self.journal.update_trade(record.trade_id, exit_price=exit_price, exit_time=self.journal._now(), result="CLOSED", profit_loss=pnl)
             return {"success": True, "order_id": order_id, "message": result.message}
         return result
 
     def get_open_positions(self):
         positions = self.orders.get_open_positions(); return positions if positions else []
-
-    def no_trade(self, symbol, timeframe, account, reason):
-        return {"symbol": symbol, "timeframe": timeframe, "status": "rejected", "reason": reason, "account": account, "decision": "NO_TRADE"}
+    def no_trade(self, symbol, timeframe, account, reason): return {"symbol": symbol, "timeframe": timeframe, "status": "rejected", "reason": reason, "account": account, "decision": "NO_TRADE"}
