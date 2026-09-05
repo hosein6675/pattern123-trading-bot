@@ -4,6 +4,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes
 
 from modules.config import active_config
+from modules.multi_timeframe_analysis import analyze as analyze_multi_timeframe
 from modules.telegram_controls import (
     ANALYSIS_TIMEFRAMES,
     STRUCTURE_TIMEFRAMES,
@@ -167,15 +168,29 @@ class TelegramBot:
     async def _analysis_text(self, selection: TelegramSelection) -> str:
         if self.engine is None:
             return "📈 موتور تحلیل به تلگرام متصل نشده است؛ نتیجه واقعی بدون داده بازار ساخته نمی‌شود."
+
         reports: list[str] = []
         for symbol in sorted(selection.symbols):
             try:
-                result = self.engine.analyze_market(symbol, selection.analysis_timeframe)
-                view = analysis_view_from_result(result, symbol=symbol, selection=selection)
-                reports.append(render_analysis(view))
+                multi = analyze_multi_timeframe(self.engine, symbol, selection)
+                layers = (
+                    ("🏗 ساختار", multi.structure, selection.structure_timeframe),
+                    ("🔎 تحلیل", multi.analysis, selection.analysis_timeframe),
+                    ("🎯 تریگر", multi.trigger, selection.trigger_timeframe),
+                )
+                layer_reports: list[str] = []
+                for label, result, timeframe in layers:
+                    view = analysis_view_from_result(result, symbol=symbol, selection=selection)
+                    view.structure_timeframe = timeframe
+                    view.analysis_timeframe = timeframe
+                    view.trigger_timeframe = timeframe
+                    layer_reports.append(f"{label}\n{render_analysis(view)}")
+                if multi.warnings:
+                    layer_reports.append("⚠️ وضعیت چندتایم‌فریمی\n" + "\n".join(f"• {item}" for item in multi.warnings))
+                reports.append("\n\n━━━━━━━━━━━━━━\n\n".join(layer_reports))
             except Exception as exc:
                 reports.append(f"📈 {symbol}\n\n❌ تحلیل اجرا نشد.\nخطای فنی: {type(exc).__name__}")
-        return "\n\n━━━━━━━━━━━━━━\n\n".join(reports)
+        return "\n\n════════════════════\n\n".join(reports)
 
     def build(self):
         self.application = Application.builder().token(self.token).build()
