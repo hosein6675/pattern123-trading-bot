@@ -1,20 +1,20 @@
-import os
 import logging
+import os
 
 import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 
-from modules.trading_engine import TradingEngine
 from modules.config import active_config
-from modules.telegram_bot import TelegramBot
 from modules.dashboard import render
-
+from modules.trading_engine import TradingEngine
+from modules.telegram_bot import TelegramBot
 
 logging.basicConfig(level=logging.INFO)
 app = FastAPI(title="Pattern 123 Trading Assistant")
-WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "change-me")
-BOT_TOKEN = os.getenv("BOT_TOKEN", "")
+WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "").strip()
+TEST_TRADE_ENABLED = os.getenv("TEST_TRADE_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
+BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
 trading_engine = TradingEngine()
 telegram_bot = None
 
@@ -66,7 +66,7 @@ async def analyze_market(request: Request):
 
 @app.post("/webhook/market")
 async def market_webhook(request: Request):
-    if request.headers.get("X-Webhook-Secret") != WEBHOOK_SECRET:
+    if not WEBHOOK_SECRET or request.headers.get("X-Webhook-Secret") != WEBHOOK_SECRET:
         return {"ok": False, "error": "unauthorized"}
     data = await request.json()
     symbol = data.get("symbol", active_config.symbol)
@@ -87,15 +87,9 @@ async def dashboard():
 
 @app.post("/trade/test")
 async def test_trade():
-    if active_config.mode != "demo":
-        return {"ok": False, "error": "Demo trade endpoint is disabled in live mode"}
-    result = trading_engine.execute_order(
-        symbol=active_config.symbol,
-        direction="buy",
-        volume=0.01,
-        stop_loss=1.0,
-        take_profit=1.2,
-    )
+    if not TEST_TRADE_ENABLED or active_config.mode != "demo":
+        return {"ok": False, "error": "Test trade endpoint is disabled"}
+    result = trading_engine.execute_order(symbol=active_config.symbol, direction="buy", volume=0.01, stop_loss=1.0, take_profit=1.2)
     return {"ok": True, "order": result}
 
 
