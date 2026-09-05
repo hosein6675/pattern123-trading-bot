@@ -24,6 +24,7 @@ class TradeRecord:
     reason: str
     analysis: str
     trade_id: str | None = None
+    broker_order_id: str | None = None
     positive_factors: list[str] = field(default_factory=list)
     negative_factors: list[str] = field(default_factory=list)
     risk_percent: float = 0.0
@@ -75,15 +76,16 @@ class JournalEngine:
     def create_trade(self, symbol, timeframe, direction, entry_price, exit_price=None,
                      stop_loss=0.0, take_profit=0.0, result="OPEN", profit_loss=0.0,
                      reason="", analysis="", entry_time=None, exit_time=None,
-                     positive_factors=None, negative_factors=None, risk_percent=0.0,
-                     reward_risk=0.0, strategy_version="Pattern123 V1", market_context="",
-                     mistakes=None, ai_review=""):
+                     broker_order_id=None, positive_factors=None, negative_factors=None,
+                     risk_percent=0.0, reward_risk=0.0, strategy_version="Pattern123 V1",
+                     market_context="", mistakes=None, ai_review=""):
         trade = TradeRecord(
             symbol=str(symbol).upper(), timeframe=str(timeframe).upper(), direction=str(direction).lower(),
             entry_price=float(entry_price), exit_price=None if exit_price is None else float(exit_price),
             stop_loss=float(stop_loss), take_profit=float(take_profit),
             entry_time=entry_time or self._now(), exit_time=exit_time,
             result=str(result).upper(), profit_loss=float(profit_loss), reason=str(reason), analysis=str(analysis),
+            broker_order_id=None if broker_order_id is None else str(broker_order_id),
             positive_factors=list(positive_factors or []), negative_factors=list(negative_factors or []),
             risk_percent=float(risk_percent), reward_risk=float(reward_risk), strategy_version=str(strategy_version),
             market_context=str(market_context), mistakes=list(mistakes or []), ai_review=str(ai_review),
@@ -103,6 +105,13 @@ class JournalEngine:
         with self._connect() as conn:
             row = conn.execute("SELECT payload FROM trades WHERE trade_id=?", (trade_id,)).fetchone()
         return TradeRecord(**json.loads(row["payload"])) if row else None
+
+    def find_by_broker_order(self, broker_order_id: str | int) -> TradeRecord | None:
+        wanted = str(broker_order_id)
+        for trade in self.get_history():
+            if trade.broker_order_id == wanted:
+                return trade
+        return None
 
     def get_history(self, limit: int | None = None) -> list[TradeRecord]:
         sql = "SELECT payload FROM trades ORDER BY entry_time DESC"
