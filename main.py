@@ -24,7 +24,7 @@ async def startup_event():
     global telegram_bot
     logging.info("Pattern123 Trading Bot Started")
     if BOT_TOKEN:
-        telegram_bot = TelegramBot(BOT_TOKEN)
+        telegram_bot = TelegramBot(BOT_TOKEN, trading_engine)
         telegram_bot.build()
         await telegram_bot.application.initialize()
         await telegram_bot.application.start()
@@ -52,7 +52,6 @@ async def health():
 
 @app.get("/broker/status")
 async def broker_status():
-    """Return broker connectivity without placing an order."""
     return trading_engine.orders.status()
 
 
@@ -88,7 +87,6 @@ async def dashboard():
 
 @app.post("/trade/test")
 async def test_trade():
-    """Demo-only order smoke test; live mode is explicitly blocked."""
     if active_config.mode != "demo":
         return {"ok": False, "error": "Demo trade endpoint is disabled in live mode"}
     result = trading_engine.execute_order(
