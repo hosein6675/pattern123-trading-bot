@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes
 
@@ -181,9 +183,12 @@ class TelegramBot:
                 layer_reports: list[str] = []
                 for label, result, timeframe in layers:
                     view = analysis_view_from_result(result, symbol=symbol, selection=selection)
-                    view.structure_timeframe = timeframe
-                    view.analysis_timeframe = timeframe
-                    view.trigger_timeframe = timeframe
+                    view = replace(
+                        view,
+                        structure_timeframe=timeframe,
+                        analysis_timeframe=timeframe,
+                        trigger_timeframe=timeframe,
+                    )
                     layer_reports.append(f"{label}\n{render_analysis(view)}")
                 if multi.warnings:
                     layer_reports.append("⚠️ وضعیت چندتایم‌فریمی\n" + "\n".join(f"• {item}" for item in multi.warnings))
