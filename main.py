@@ -47,7 +47,18 @@ async def shutdown_event():
 
 @app.get("/")
 async def health():
-    return {"status": "online", "service": "pattern123-trading-bot", "mode": active_config.mode, "symbol": active_config.symbol}
+    return {
+        "status": "online",
+        "service": "pattern123-trading-bot",
+        "mode": active_config.mode,
+        "symbol": active_config.symbol,
+        "telegram": "enabled" if telegram_bot else "disabled",
+    }
+
+
+@app.get("/health")
+async def health_alias():
+    return await health()
 
 
 @app.get("/broker/status")
