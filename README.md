@@ -35,3 +35,28 @@
 - `docs/BACKTEST_LAB.md` — آزمایشگاه backtest
 - `docs/FINAL_RELEASE_GATE.md` — گیت نهایی انتشار
 - `docs/DEVELOPMENT_GATES.md` — قواعد توسعه و merge
+
+## راه‌اندازی Telegram روی Render
+
+فایل `render.yaml` متغیرهای `BOT_TOKEN` و `WEBHOOK_SECRET` را به‌صورت secret و بدون مقدار داخل Git تعریف می‌کند. توکن واقعی Telegram نباید در GitHub، `.env.example` یا کد commit شود.
+
+در Render برای سرویس `pattern123-trading-bot`:
+1. به **Environment** بروید.
+2. متغیر `BOT_TOKEN` را ایجاد کنید و مقدار توکن BotFather را همان‌جا وارد کنید.
+3. برای `WEBHOOK_SECRET` یک مقدار تصادفی و غیرقابل‌حدس قرار دهید.
+4. **Save Changes** و سپس **Manual Deploy / Deploy latest commit** را اجرا کنید.
+5. پس از بالا آمدن سرویس، endpointهای `/` یا `/health` باید مقدار `telegram: enabled` را نشان دهند.
+6. سپس در Telegram دستور `/start` را ارسال کنید.
+
+اگر `BOT_TOKEN` تنظیم نشده باشد، سرویس وب همچنان بالا می‌آید اما Telegram عمداً غیرفعال می‌ماند؛ این رفتار fail-closed است و خطای آن در لاگ startup ثبت می‌شود.
+
+### تست مرحله‌ای Telegram
+
+ترتیب تست عملی:
+- `/start` و نمایش منوی اصلی
+- انتخاب چند نماد و تغییر هر سه لایه timeframe
+- ورود به **اجرای تحلیل** و بررسی اینکه بدون داده معتبر، سیستم سیگنال ساختگی تولید نکند
+- بررسی وضعیت حساب و تنظیمات
+- بررسی endpoint `/health` برای تأیید فعال بودن Telegram
+
+این تست‌ها جایگزین اتصال واقعی MT5 نیستند. برای تحلیل واقعی، منبع داده باید از broker/MT5 یا یک منبع بازار معتبر وارد شود.
