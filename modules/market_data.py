@@ -4,6 +4,7 @@ import math
 from datetime import datetime, timedelta, timezone
 
 from modules.config import active_config
+from modules.live_market_data import validate_candles, validate_tick
 
 
 class MarketDataEngine:
@@ -34,9 +35,27 @@ class MarketDataEngine:
         if not self.demo_mode:
             if self.broker is None:
                 return {"status": "error", "candles": [], "message": "Live broker is unavailable"}
-            return self.broker.get_candles(symbol, timeframe, count)
+            tick = self.broker.current_price(symbol)
+            tick_ok, tick_reason = validate_tick(tick)
+            if not tick_ok:
+                return {"status": "error", "candles": [], "symbol": symbol, "timeframe": timeframe, "source": "mt5", "demo_mode": False, "message": tick_reason}
+            market = self.broker.get_candles(symbol, timeframe, count)
+            if market.get("status") != "ready":
+                return market
+            candle_ok, candle_reason = validate_candles(market, timeframe)
+            if not candle_ok:
+                return {"status": "error", "candles": [], "symbol": symbol, "timeframe": timeframe, "source": "mt5", "demo_mode": False, "message": candle_reason}
+            market["live_tick_time"] = int(tick["time"])
+            return market
 
-        return {"status": "ready", "symbol": symbol, "timeframe": timeframe, "candles": self._generate_demo_candles(symbol, timeframe, count), "source": "demo", "demo_mode": True}
+        return {
+            "status": "ready",
+            "symbol": symbol,
+            "timeframe": timeframe,
+            "candles": self._generate_demo_candles(symbol, timeframe, count),
+            "source": "demo",
+            "demo_mode": True,
+        }
 
     def _generate_demo_candles(self, symbol, timeframe, count=200):
         count = max(int(count), self.DEFAULT_CANDLE_COUNT)
@@ -62,9 +81,10 @@ class MarketDataEngine:
         symbol = str(symbol).upper()
         if not self.demo_mode and self.broker is not None:
             tick = self.broker.current_price(symbol)
-            if tick.get("status") != "ready":
-                return tick
-            return {"status": "ready", "symbol": symbol, "price": (tick["bid"] + tick["ask"]) / 2.0, "source": "mt5", "demo_mode": False}
+            ok, reason = validate_tick(tick)
+            if not ok:
+                return {"status": "error", "symbol": symbol, "price": None, "source": "mt5", "demo_mode": False, "message": reason}
+            return {"status": "ready", "symbol": symbol, "price": (tick["bid"] + tick["ask"]) / 2.0, "source": "mt5", "demo_mode": False, "time": int(tick["time"])}
         return {"status": "ready", "symbol": symbol, "price": round(self._base_price(symbol), 5), "source": "demo", "demo_mode": True}
 
     def is_available(self):
