@@ -46,13 +46,29 @@ class TradingEngine:
         if timeframe not in ("M1", "M5", "M15", "H1", "H4", "D1"):
             return self.no_trade(symbol, timeframe, account, "Unsupported timeframe")
 
-        if candles is None:
+        # In live mode, caller-supplied candles are never trusted. Analysis must
+        # obtain the requested timeframe directly from the live MT5 adapter.
+        if active_config.mode == "live":
             market = self.market_data.get_candles(symbol, timeframe, days=200)
-            if not market or market.get("status") != "ready":
-                return self.no_trade(symbol, timeframe, account, "Market data unavailable")
-            candles = market.get("candles", [])
+        elif candles is None:
+            market = self.market_data.get_candles(symbol, timeframe, days=200)
+        else:
+            market = {"status": "ready", "candles": candles, "source": "caller", "demo_mode": False}
+
+        if not market or market.get("status") != "ready":
+            return self.no_trade(
+                symbol,
+                timeframe,
+                account,
+                market.get("message", "Live MT5 market data unavailable") if isinstance(market, dict) else "Market data unavailable",
+            )
+        if active_config.mode == "live" and (
+            market.get("source") != "mt5" or market.get("demo_mode") is not False
+        ):
+            return self.no_trade(symbol, timeframe, account, "Live analysis requires MT5 market data")
+        candles = market.get("candles", [])
         if not candles or len(candles) < 50:
-            return self.no_trade(symbol, timeframe, account, "Not enough candles")
+            return self.no_trade(symbol, timeframe, account, "Not enough market candles")
 
         news = self.news.check_news(symbol)
         if news is not None and not getattr(news, "allow_trade", True):
@@ -78,6 +94,7 @@ class TradingEngine:
                 "account": account, "market_context": context, "structure": structure,
                 "price_action": price_action, "macd": macd, "trendline_fan": trendline_fan,
                 "strategy": strategy_result, "news": news, "decision": "NO_TRADE",
+                "market_source": market.get("source"), "market_time": market.get("live_tick_time"),
                 "open_positions": len(self.get_open_positions()),
             }
 
@@ -105,7 +122,8 @@ class TradingEngine:
             "account": account, "market_context": context, "structure": structure,
             "price_action": price_action, "macd": macd, "trendline_fan": trendline_fan,
             "strategy": strategy_result, "news": news, "risk": risk,
-            "decision": final_decision, "open_positions": len(positions),
+            "decision": final_decision, "market_source": market.get("source"),
+            "market_time": market.get("live_tick_time"), "open_positions": len(positions),
         }
 
     def dashboard_snapshot(self, symbol=None, timeframe=None, candles=None):
