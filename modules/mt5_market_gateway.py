@@ -5,9 +5,9 @@ from datetime import datetime, timezone
 from threading import Lock
 from typing import Any
 
-from modules.live_market_data import validate_candles, validate_tick
+from modules.live_market_data import JOURNAL_TIMEFRAMES, TIMEFRAME_OPTIONS, validate_candles, validate_tick
 
-REQUIRED_TIMEFRAMES = ("M1", "M5", "M15", "H1", "H4", "D1")
+REQUIRED_TIMEFRAMES = JOURNAL_TIMEFRAMES
 
 
 class MT5MarketGateway:
@@ -58,7 +58,13 @@ class MT5MarketGateway:
             "received_at": datetime.now(timezone.utc).isoformat(),
         }
 
-        for timeframe in REQUIRED_TIMEFRAMES:
+        supplied = {str(item).upper() for item in raw_timeframes}
+        if not set(REQUIRED_TIMEFRAMES).issubset(supplied):
+            missing = sorted(set(REQUIRED_TIMEFRAMES) - supplied)
+            return False, f"Missing journal timeframes: {missing}"
+        for timeframe in supplied:
+            if timeframe not in TIMEFRAME_OPTIONS:
+                return False, f"Unsupported timeframe: {timeframe}"
             market = {
                 "source": "mt5",
                 "demo_mode": False,
@@ -90,7 +96,17 @@ class MT5MarketGateway:
                 "candles": [],
                 "message": "No live MT5 snapshot received",
             }
-        if timeframe not in REQUIRED_TIMEFRAMES:
+        if timeframe not in snapshot["timeframes"]:
+            return {
+                "status": "error",
+                "symbol": symbol,
+                "timeframe": timeframe,
+                "source": "mt5",
+                "demo_mode": False,
+                "candles": [],
+                "message": "Requested timeframe has not been received from MT5",
+            }
+        if timeframe not in TIMEFRAME_OPTIONS:
             return {
                 "status": "error",
                 "symbol": symbol,
