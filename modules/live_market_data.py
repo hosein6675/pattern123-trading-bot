@@ -4,7 +4,17 @@ from datetime import datetime, timezone
 import math
 from typing import Any
 
-TIMEFRAME_MINUTES = {"M1": 1, "M5": 5, "M15": 15, "H1": 60, "H4": 240, "D1": 1440}
+TIMEFRAME_SECONDS = {
+    "S1": 1, "S2": 2, "S3": 3, "S4": 4, "S5": 5, "S6": 6, "S10": 10,
+    "S12": 12, "S15": 15, "S20": 20, "S30": 30,
+    "M1": 60, "M2": 120, "M3": 180, "M4": 240, "M5": 300, "M6": 360,
+    "M10": 600, "M12": 720, "M15": 900, "M20": 1200, "M30": 1800,
+    "H1": 3600, "H2": 7200, "H3": 10800, "H4": 14400, "H6": 21600,
+    "H8": 28800, "H12": 43200,
+    "D1": 86400, "W1": 604800, "MN1": 2592000,
+}
+TIMEFRAME_OPTIONS = tuple(TIMEFRAME_SECONDS)
+JOURNAL_TIMEFRAMES = ("M1", "M5", "M15", "H1", "H4", "D1")
 
 
 def _finite_positive(value: Any) -> bool:
@@ -46,7 +56,7 @@ def validate_candles(
     candles = market.get("candles")
     if not isinstance(candles, list) or len(candles) < minimum_count:
         return False, "Insufficient MT5 candles"
-    if timeframe not in TIMEFRAME_MINUTES:
+    if timeframe not in TIMEFRAME_SECONDS:
         return False, "Unsupported timeframe"
 
     previous_time = None
@@ -71,7 +81,7 @@ def validate_candles(
 
     current = now or datetime.now(timezone.utc)
     age = current.timestamp() - previous_time
-    allowed_age = max(120, TIMEFRAME_MINUTES[timeframe] * 60 * 2.5)
+    allowed_age = max(120, TIMEFRAME_SECONDS[timeframe] * 2.5)
     if age < -5:
         return False, "Latest MT5 candle timestamp is in the future"
     if age > allowed_age:
