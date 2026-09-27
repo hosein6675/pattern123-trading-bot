@@ -1,4 +1,3 @@
-import os
 import time
 
 from modules.mt5_execution_gateway import (
