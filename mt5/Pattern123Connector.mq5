@@ -1,5 +1,5 @@
 #property strict
-#property version   "1.0.0"
+#property version   "1.1.0"
 #property description "Pattern 123 / ARMOS - secure MT5 market-data and execution connector"
 
 #include <Trade/Trade.mqh>
@@ -13,6 +13,7 @@ input string InpSymbol = "";
 input int    InpBarsPerTimeframe = 200;
 input int    InpPushIntervalSeconds = 15;
 input int    InpHttpTimeoutMs = 5000;
+input string InpAdditionalTimeframes = "";
 input bool   InpEnableTradingCommands = false;
 
 string BaseUrl()
@@ -48,20 +49,43 @@ string TimeframeName(ENUM_TIMEFRAMES tf)
 {
    switch(tf)
    {
-      case PERIOD_M1:  return "M1";
-      case PERIOD_M5:  return "M5";
-      case PERIOD_M15: return "M15";
-      case PERIOD_H1:  return "H1";
-      case PERIOD_H4:  return "H4";
-      case PERIOD_D1:  return "D1";
+      case PERIOD_S1: return "S1"; case PERIOD_S2: return "S2"; case PERIOD_S3: return "S3";
+      case PERIOD_S4: return "S4"; case PERIOD_S5: return "S5"; case PERIOD_S6: return "S6";
+      case PERIOD_S10: return "S10"; case PERIOD_S12: return "S12"; case PERIOD_S15: return "S15";
+      case PERIOD_S20: return "S20"; case PERIOD_S30: return "S30";
+      case PERIOD_M1: return "M1"; case PERIOD_M2: return "M2"; case PERIOD_M3: return "M3";
+      case PERIOD_M4: return "M4"; case PERIOD_M5: return "M5"; case PERIOD_M6: return "M6";
+      case PERIOD_M10: return "M10"; case PERIOD_M12: return "M12"; case PERIOD_M15: return "M15";
+      case PERIOD_M20: return "M20"; case PERIOD_M30: return "M30";
+      case PERIOD_H1: return "H1"; case PERIOD_H2: return "H2"; case PERIOD_H3: return "H3";
+      case PERIOD_H4: return "H4"; case PERIOD_H6: return "H6"; case PERIOD_H8: return "H8";
+      case PERIOD_H12: return "H12";
+      case PERIOD_D1: return "D1"; case PERIOD_W1: return "W1"; case PERIOD_MN1: return "MN1";
    }
    return "";
 }
 
-bool IsAllowedTimeframe(ENUM_TIMEFRAMES tf)
+bool StringToTimeframe(string value, ENUM_TIMEFRAMES &tf)
 {
-   return tf == PERIOD_M1 || tf == PERIOD_M5 || tf == PERIOD_M15 ||
-          tf == PERIOD_H1 || tf == PERIOD_H4 || tf == PERIOD_D1;
+   StringToUpper(value);
+   if(value=="S1") tf=PERIOD_S1; else if(value=="S2") tf=PERIOD_S2;
+   else if(value=="S3") tf=PERIOD_S3; else if(value=="S4") tf=PERIOD_S4;
+   else if(value=="S5") tf=PERIOD_S5; else if(value=="S6") tf=PERIOD_S6;
+   else if(value=="S10") tf=PERIOD_S10; else if(value=="S12") tf=PERIOD_S12;
+   else if(value=="S15") tf=PERIOD_S15; else if(value=="S20") tf=PERIOD_S20;
+   else if(value=="S30") tf=PERIOD_S30; else if(value=="M1") tf=PERIOD_M1;
+   else if(value=="M2") tf=PERIOD_M2; else if(value=="M3") tf=PERIOD_M3;
+   else if(value=="M4") tf=PERIOD_M4; else if(value=="M5") tf=PERIOD_M5;
+   else if(value=="M6") tf=PERIOD_M6; else if(value=="M10") tf=PERIOD_M10;
+   else if(value=="M12") tf=PERIOD_M12; else if(value=="M15") tf=PERIOD_M15;
+   else if(value=="M20") tf=PERIOD_M20; else if(value=="M30") tf=PERIOD_M30;
+   else if(value=="H1") tf=PERIOD_H1; else if(value=="H2") tf=PERIOD_H2;
+   else if(value=="H3") tf=PERIOD_H3; else if(value=="H4") tf=PERIOD_H4;
+   else if(value=="H6") tf=PERIOD_H6; else if(value=="H8") tf=PERIOD_H8;
+   else if(value=="H12") tf=PERIOD_H12; else if(value=="D1") tf=PERIOD_D1;
+   else if(value=="W1") tf=PERIOD_W1; else if(value=="MN1") tf=PERIOD_MN1;
+   else return false;
+   return true;
 }
 
 string BuildCandleJson(string symbol, ENUM_TIMEFRAMES tf)
@@ -119,24 +143,42 @@ string BuildMarketPayload(string symbol)
       JsonEscape(symbol), tick.bid, tick.ask, serverTime
    );
 
-   ENUM_TIMEFRAMES tfs[6] = {PERIOD_M1, PERIOD_M5, PERIOD_M15, PERIOD_H1, PERIOD_H4, PERIOD_D1};
+   string requested = "M1,M5,M15,H1,H4,D1";
+   if(StringLen(InpAdditionalTimeframes) > 0)
+      requested += "," + InpAdditionalTimeframes;
+
+   string parts[];
+   int total = StringSplit(requested, ',', parts);
    bool first = true;
-   for(int i = 0; i < 6; i++)
+   string sent_names = "|";
+
+   for(int i = 0; i < total; i++)
    {
-      if(!IsAllowedTimeframe(tfs[i]))
+      string value = parts[i];
+      StringTrimLeft(value);
+      StringTrimRight(value);
+      if(value == "")
          continue;
 
-      string name = TimeframeName(tfs[i]);
-      string candles = BuildCandleJson(symbol, tfs[i]);
+      ENUM_TIMEFRAMES tf;
+      if(!StringToTimeframe(value, tf))
+      {
+         PrintFormat("Pattern123: unsupported timeframe in configuration: %s", value);
+         return "";
+      }
+
+      string name = TimeframeName(tf);
+      if(StringFind(sent_names, "|" + name + "|") >= 0)
+         continue;
+
+      string candles = BuildCandleJson(symbol, tf);
       if(candles == "")
          return "";
 
       if(!first)
          payload += ",";
-      payload += "\"";
-      payload += name;
-      payload += "\":";
-      payload += candles;
+      payload += "\"" + name + "\":" + candles;
+      sent_names += name + "|";
       first = false;
    }
 
