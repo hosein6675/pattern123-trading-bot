@@ -3,10 +3,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Mapping
 
+from modules.live_market_data import TIMEFRAME_OPTIONS, JOURNAL_TIMEFRAMES
 
-STRUCTURE_TIMEFRAMES = ("D1", "H4", "H1")
-ANALYSIS_TIMEFRAMES = ("H1", "M15", "M5", "M1")
-TRIGGER_TIMEFRAMES = ("M15", "M5", "M1")
+
+STRUCTURE_TIMEFRAMES = TIMEFRAME_OPTIONS
+ANALYSIS_TIMEFRAMES = TIMEFRAME_OPTIONS
+TRIGGER_TIMEFRAMES = TIMEFRAME_OPTIONS
 
 
 @dataclass
