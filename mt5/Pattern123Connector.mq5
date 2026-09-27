@@ -1,6 +1,11 @@
 #property strict
 #property version   "1.0.0"
-#property description "Pattern 123 / ARMOS - secure MT5 market-data connector"
+#property description "Pattern 123 / ARMOS - secure MT5 market-data and execution connector"
+
+#include <Trade/Trade.mqh>
+
+CTrade TradeEngine;
+string g_last_command_id = "";
 
 input string InpBackendUrl = "https://pattern123-trading-bot.onrender.com";
 input string InpWebhookSecret = "";
@@ -9,6 +14,14 @@ input int    InpBarsPerTimeframe = 200;
 input int    InpPushIntervalSeconds = 15;
 input int    InpHttpTimeoutMs = 5000;
 input bool   InpEnableTradingCommands = false;
+
+string BaseUrl()
+{
+   string base = BaseUrl();
+   while(StringLen(base) > 0 && StringSubstr(base, StringLen(base)-1, 1) == "/")
+      base = StringSubstr(base, 0, StringLen(base)-1);
+   return base;
+}
 
 string ApiUrl()
 {
@@ -166,6 +179,197 @@ bool PostJson(string url, string body, string &response)
    return true;
 }
 
+bool HmacSha256(string secret, string message, string &hex)
+{
+   uchar key[], data[], inner_data[], outer_data[], inner_hash[], final_hash[];
+   int key_len = StringToCharArray(secret, key, 0, WHOLE_ARRAY, CP_UTF8);
+   int data_len = StringToCharArray(message, data, 0, WHOLE_ARRAY, CP_UTF8);
+   if(key_len <= 0 || data_len <= 0)
+      return false;
+   ArrayResize(key, key_len - 1);
+   ArrayResize(data, data_len - 1);
+
+   uchar key_block[];
+   ArrayResize(key_block, 64);
+   ArrayInitialize(key_block, 0);
+   if(ArraySize(key) > 64)
+   {
+      uchar hashed_key[];
+      if(CryptEncode(CRYPT_HASH_SHA256, key, key, hashed_key) <= 0)
+         return false;
+      ArrayCopy(key_block, hashed_key, 0, 0, MathMin(ArraySize(hashed_key), 64));
+   }
+   else
+      ArrayCopy(key_block, key, 0, 0, ArraySize(key));
+
+   ArrayResize(inner_data, 64 + ArraySize(data));
+   ArrayResize(outer_data, 64 + 32);
+   for(int i=0;i<64;i++)
+   {
+      inner_data[i] = key_block[i] ^ 0x36;
+      outer_data[i] = key_block[i] ^ 0x5c;
+   }
+   ArrayCopy(inner_data, data, 64, 0, ArraySize(data));
+
+   if(CryptEncode(CRYPT_HASH_SHA256, inner_data, key_block, inner_hash) <= 0)
+      return false;
+   ArrayCopy(outer_data, inner_hash, 64, 0, 32);
+
+   if(CryptEncode(CRYPT_HASH_SHA256, outer_data, key_block, final_hash) <= 0)
+      return false;
+
+   hex = "";
+   for(int j=0;j<ArraySize(final_hash);j++)
+      hex += StringFormat("%02x", final_hash[j]);
+   return StringLen(hex) == 64;
+}
+
+string JsonField(string json, string field)
+{
+   string marker = "\"" + field + "\":";
+   int p = StringFind(json, marker);
+   if(p < 0) return "";
+   p += StringLen(marker);
+   while(p < StringLen(json) && (StringSubstr(json,p,1)==" " || StringSubstr(json,p,1)=="\t"))
+      p++;
+   if(p < StringLen(json) && StringSubstr(json,p,1) == "\"")
+   {
+      int start = ++p;
+      while(p < StringLen(json))
+      {
+         if(StringSubstr(json,p,1) == "\"" && (p == start || StringSubstr(json,p-1,1) != "\\"))
+            return StringSubstr(json,start,p-start);
+         p++;
+      }
+      return "";
+   }
+   int start = p;
+   while(p < StringLen(json))
+   {
+      string ch = StringSubstr(json,p,1);
+      if(ch == "," || ch == "}") break;
+      p++;
+   }
+   return StringSubstr(json,start,p-start);
+}
+
+double JsonDouble(string json, string field)
+{
+   return StringToDouble(JsonField(json, field));
+}
+
+long JsonLong(string json, string field)
+{
+   return (long)StringToInteger(JsonField(json, field));
+}
+
+bool PollCommands(string &response)
+{
+   if(!InpEnableTradingCommands || StringLen(InpWebhookSecret) == 0)
+      return false;
+
+   string headers = "X-Webhook-Secret: " + InpWebhookSecret + "\r\n";
+   char data[], result[];
+   string response_headers = "";
+   int code = WebRequest("GET", BaseUrl() + "/webhook/mt5/commands", headers,
+                         InpHttpTimeoutMs, data, 0, result, response_headers);
+   if(code < 200 || code >= 300)
+      return false;
+   response = CharArrayToString(result, 0, -1, CP_UTF8);
+   return StringLen(response) > 0;
+}
+
+bool ExecuteCommand(string json)
+{
+   string command_id = JsonField(json, "command_id");
+   string symbol = JsonField(json, "symbol");
+   string direction = JsonField(json, "direction");
+   string signature = JsonField(json, "signature");
+   long expires_at = JsonLong(json, "expires_at");
+   double volume = JsonDouble(json, "volume");
+   double stop_loss = JsonDouble(json, "stop_loss");
+   double take_profit = JsonDouble(json, "take_profit");
+
+   if(command_id == "" || symbol == "" || signature == "" || expires_at < TimeCurrent())
+      return false;
+   if(command_id == g_last_command_id)
+      return false;
+   if(direction != "buy" && direction != "sell")
+      return false;
+   if(volume <= 0 || stop_loss <= 0 || take_profit <= 0)
+      return false;
+   if(!SymbolSelect(symbol, true))
+      return false;
+
+   string canonical = StringFormat("%s|%s|%s|%.8f|%.10f|%.10f|%I64d",
+                                   command_id, StringToUpper(symbol), direction,
+                                   volume, stop_loss, take_profit, expires_at);
+   string expected = "";
+   if(!HmacSha256(InpWebhookSecret, canonical, expected) || expected != signature)
+      return false;
+
+   MqlTick tick;
+   if(!SymbolInfoTick(symbol, tick))
+      return false;
+   int digits = (int)SymbolInfoInteger(symbol, SYMBOL_DIGITS);
+   stop_loss = NormalizeDouble(stop_loss, digits);
+   take_profit = NormalizeDouble(take_profit, digits);
+
+   TradeEngine.SetTypeFillingBySymbol(symbol);
+   TradeEngine.SetDeviationInPoints(20);
+
+   bool sent = false;
+   if(direction == "buy")
+   {
+      if(stop_loss >= tick.ask || take_profit <= tick.ask)
+         return false;
+      sent = TradeEngine.Buy(volume, symbol, 0.0, stop_loss, take_profit, "Pattern123");
+   }
+   else
+   {
+      if(stop_loss <= tick.bid || take_profit >= tick.bid)
+         return false;
+      sent = TradeEngine.Sell(volume, symbol, 0.0, stop_loss, take_profit, "Pattern123");
+   }
+
+   uint retcode = TradeEngine.ResultRetcode();
+   ulong order_id = TradeEngine.ResultOrder();
+   ulong deal_id = TradeEngine.ResultDeal();
+   string status = (sent && (retcode == TRADE_RETCODE_DONE || retcode == TRADE_RETCODE_PLACED ||
+                             retcode == TRADE_RETCODE_DONE_PARTIAL)) ? "executed" : "rejected";
+   string message = TradeEngine.ResultRetcodeDescription();
+   if(status == "executed")
+      g_last_command_id = command_id;
+
+   string result_canonical = StringFormat("%s|%s|%I64u|%s|%I64d",
+                                          command_id, status, order_id, message, (long)TimeCurrent());
+   string result_signature = "";
+   if(!HmacSha256(InpWebhookSecret, result_canonical, result_signature))
+      return false;
+
+   string body = StringFormat(
+      "{\"command_id\":\"%s\",\"status\":\"%s\",\"order_id\":\"%I64u\","
+      "\"deal_id\":\"%I64u\",\"message\":\"%s\",\"timestamp\":%I64d,\"signature\":\"%s\"}",
+      JsonEscape(command_id), status, order_id, deal_id, JsonEscape(message),
+      (long)TimeCurrent(), result_signature);
+
+   string result_response = "";
+   return PostJson(BaseUrl() + "/webhook/mt5/command-result", body, result_response);
+}
+
+void PollAndExecuteCommands()
+{
+   string response = "";
+   if(!PollCommands(response))
+      return;
+
+   string command = JsonField(response, "command_id");
+   if(command == "")
+      return;
+
+   ExecuteCommand(response);
+}
+
 bool PushMarket()
 {
    string symbol = ActiveSymbol();
@@ -228,4 +432,5 @@ void OnTick()
 void OnTimer()
 {
    PushMarket();
+   PollAndExecuteCommands();
 }
