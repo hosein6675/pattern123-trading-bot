@@ -17,7 +17,7 @@ input bool   InpEnableTradingCommands = false;
 
 string BaseUrl()
 {
-   string base = BaseUrl();
+   string base = InpBackendUrl;
    while(StringLen(base) > 0 && StringSubstr(base, StringLen(base)-1, 1) == "/")
       base = StringSubstr(base, 0, StringLen(base)-1);
    return base;
@@ -25,10 +25,7 @@ string BaseUrl()
 
 string ApiUrl()
 {
-   string base = InpBackendUrl;
-   while(StringLen(base) > 0 && StringSubstr(base, StringLen(base)-1, 1) == "/")
-      base = StringSubstr(base, 0, StringLen(base)-1);
-   return base + "/webhook/mt5";
+   return BaseUrl() + "/webhook/mt5";
 }
 
 string ActiveSymbol()
@@ -224,6 +221,39 @@ bool HmacSha256(string secret, string message, string &hex)
    return StringLen(hex) == 64;
 }
 
+string JsonObjectField(string json, string field)
+{
+   string marker = "\"" + field + "\":";
+   int p = StringFind(json, marker);
+   if(p < 0) return "";
+   p += StringLen(marker);
+   while(p < StringLen(json) && (StringSubstr(json,p,1)==" " || StringSubstr(json,p,1)=="\t")) p++;
+   if(p >= StringLen(json) || StringSubstr(json,p,1) != "{") return "";
+   int start = p;
+   int depth = 0;
+   bool in_string = false;
+   bool escaped = false;
+   for(; p < StringLen(json); p++)
+   {
+      string ch = StringSubstr(json,p,1);
+      if(in_string)
+      {
+         if(escaped) escaped = false;
+         else if(ch == "\\") escaped = true;
+         else if(ch == "\"") in_string = false;
+         continue;
+      }
+      if(ch == "\"") { in_string = true; continue; }
+      if(ch == "{") depth++;
+      else if(ch == "}")
+      {
+         depth--;
+         if(depth == 0) return StringSubstr(json,start,p-start+1);
+      }
+   }
+   return "";
+}
+
 string JsonField(string json, string field)
 {
    string marker = "\"" + field + "\":";
@@ -365,11 +395,11 @@ void PollAndExecuteCommands()
    if(!PollCommands(response))
       return;
 
-   string command = JsonField(response, "command_id");
+   string command = JsonObjectField(response, "command");
    if(command == "")
       return;
 
-   ExecuteCommand(response);
+   ExecuteCommand(command);
 }
 
 bool PushMarket()
