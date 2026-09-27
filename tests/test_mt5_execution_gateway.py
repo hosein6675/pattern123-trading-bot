@@ -33,6 +33,19 @@ def test_issue_fails_closed_when_live_execution_disabled(monkeypatch):
     assert command is None
 
 
+def test_issue_creates_signed_pending_command(monkeypatch):
+    monkeypatch.setenv("WEBHOOK_SECRET", "secret")
+    monkeypatch.setattr("modules.mt5_execution_gateway.active_config.mode", "live")
+    monkeypatch.setattr("modules.mt5_execution_gateway.active_config.live_trading_enabled", True)
+    gateway = MT5ExecutionGateway()
+    ok, reason, command = gateway.issue("EURUSD", "buy", 0.01, 1.09, 1.12)
+    assert ok
+    assert reason == "queued"
+    assert command["status"] == "pending"
+    assert verify_command_signature("secret", command, command["signature"])
+    assert len(gateway.pending("EURUSD")) == 1
+
+
 def test_result_requires_known_pending_command(monkeypatch):
     monkeypatch.setenv("WEBHOOK_SECRET", "secret")
     gateway = MT5ExecutionGateway()
