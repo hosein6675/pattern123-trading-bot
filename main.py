@@ -10,6 +10,7 @@ from modules.config import active_config
 from modules.telegram_bot import TelegramBot
 from modules.dashboard import render
 from modules.mt5_market_gateway import mt5_market_gateway
+from modules.mt5_execution_gateway import mt5_execution_gateway
 
 
 logging.basicConfig(level=logging.INFO)
@@ -101,6 +102,37 @@ async def mt5_market_webhook(request: Request):
         "live_tick_time": int(data["tick"]["time"]),
         "timeframes": ["M1", "M5", "M15", "H1", "H4", "D1"],
     }
+
+
+@app.get("/webhook/mt5/commands")
+async def mt5_execution_commands(request: Request):
+    if not WEBHOOK_SECRET:
+        return {"ok": False, "error": "MT5 webhook secret is not configured"}
+    if request.headers.get("X-Webhook-Secret") != WEBHOOK_SECRET:
+        return {"ok": False, "error": "unauthorized"}
+    symbol = request.query_params.get("symbol")
+    return {"ok": True, "commands": mt5_execution_gateway.pending(symbol)}
+
+
+@app.post("/webhook/mt5/command-result")
+async def mt5_execution_result(request: Request):
+    if not WEBHOOK_SECRET:
+        return {"ok": False, "error": "MT5 webhook secret is not configured"}
+    if request.headers.get("X-Webhook-Secret") != WEBHOOK_SECRET:
+        return {"ok": False, "error": "unauthorized"}
+    try:
+        data = await request.json()
+    except Exception:
+        return {"ok": False, "error": "invalid_json"}
+    accepted, reason = mt5_execution_gateway.accept_result(data)
+    return {"ok": accepted, "result": reason}
+
+
+@app.get("/execution/status")
+async def execution_status(request: Request):
+    if WEBHOOK_SECRET and request.headers.get("X-Webhook-Secret") != WEBHOOK_SECRET:
+        return {"ok": False, "error": "unauthorized"}
+    return {"ok": True, "execution": mt5_execution_gateway.status()}
 
 
 @app.get("/dashboard/state")
