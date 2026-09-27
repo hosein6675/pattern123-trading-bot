@@ -12,7 +12,6 @@ from modules.telegram_controls import (
 
 def test_timeframe_groups_match_operational_design():
     assert STRUCTURE_TIMEFRAMES == ANALYSIS_TIMEFRAMES == TRIGGER_TIMEFRAMES
-    assert "S1" in ANALYSIS_TIMEFRAMES
     assert "MN1" in ANALYSIS_TIMEFRAMES
     assert all(item in ANALYSIS_TIMEFRAMES for item in ("M1", "M5", "M15", "H1", "H4", "D1"))
 
@@ -27,10 +26,10 @@ def test_selection_can_change_all_three_timeframe_layers():
 
 def test_invalid_timeframes_are_rejected():
     selection = TelegramSelection()
-    selection.set_structure_timeframe("S1")
+    selection.set_structure_timeframe("M2")
     selection.set_analysis_timeframe("MN1")
     selection.set_trigger_timeframe("W1")
-    assert selection.structure_timeframe == "S1"
+    assert selection.structure_timeframe == "M2"
     assert selection.analysis_timeframe == "MN1"
     assert selection.trigger_timeframe == "W1"
     with pytest.raises(ValueError):
