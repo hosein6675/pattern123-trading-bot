@@ -72,3 +72,26 @@ def test_gateway_status_is_unavailable_before_live_snapshot():
     assert status["status"] == "unavailable"
     assert status["source"] == "mt5"
     assert status["demo_mode"] is False
+
+
+def test_gateway_accepts_additional_real_mt5_timeframe():
+    gateway = MT5MarketGateway()
+    data = payload()
+    extra = candles()
+    data["timeframes"]["S1"] = [
+        {**item, "time": int(item["time"]) * 1} for item in extra
+    ]
+    ok, reason = gateway.ingest(data)
+    assert ok, reason
+    market = gateway.get_candles("EURUSD", "S1")
+    assert market["status"] == "ready"
+    assert market["source"] == "mt5"
+
+
+def test_gateway_rejects_unrequested_timeframe_lookup():
+    gateway = MT5MarketGateway()
+    ok, reason = gateway.ingest(payload())
+    assert ok, reason
+    market = gateway.get_candles("EURUSD", "S1")
+    assert market["status"] == "error"
+    assert "not been received" in market["message"]
