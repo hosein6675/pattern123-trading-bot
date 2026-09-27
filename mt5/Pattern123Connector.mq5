@@ -301,8 +301,10 @@ bool ExecuteCommand(string json)
    if(!SymbolSelect(symbol, true))
       return false;
 
+   string canonical_symbol = symbol;
+   StringToUpper(canonical_symbol);
    string canonical = StringFormat("%s|%s|%s|%.8f|%.10f|%.10f|%I64d",
-                                   command_id, StringToUpper(symbol), direction,
+                                   command_id, canonical_symbol, direction,
                                    volume, stop_loss, take_profit, expires_at);
    string expected = "";
    if(!HmacSha256(InpWebhookSecret, canonical, expected) || expected != signature)
