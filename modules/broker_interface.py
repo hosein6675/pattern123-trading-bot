@@ -39,11 +39,54 @@ class DemoBroker:
         return {"status": "ready", "symbol": symbol, "bid": price, "ask": price}
 
     def contract(self, symbol):
-        return {"status": "ready", "symbol": symbol, "volume_min": active_config.min_lot, "volume_max": active_config.max_lot, "volume_step": active_config.lot_step}
+        return {
+            "status": "ready",
+            "symbol": symbol,
+            "volume_min": active_config.min_lot,
+            "volume_max": active_config.max_lot,
+            "volume_step": active_config.lot_step,
+        }
 
     def risk_per_lot(self, symbol, direction, entry, stop_loss):
         distance = abs(float(entry) - float(stop_loss))
         return distance if distance > 0 else 0.0
+
+
+class DisabledLiveBroker:
+    """Compatibility fail-closed broker for explicit disabled-live tests."""
+
+    def _error(self, message="Live trading is disabled"):
+        return {"status": "disabled", "mode": "live", "message": message}
+
+    def connect(self):
+        return self._error()
+
+    def disconnect(self):
+        return None
+
+    def open_order(self, symbol, direction, volume, stop_loss, take_profit):
+        return OrderResult(False, "", "Live trading is disabled")
+
+    def close_order(self, order_id):
+        return OrderResult(False, str(order_id), "Live trading is disabled")
+
+    def get_positions(self):
+        return []
+
+    def account_info(self):
+        return self._error()
+
+    def current_price(self, symbol):
+        return {**self._error(), "symbol": symbol}
+
+    def get_candles(self, symbol, timeframe, count=200):
+        return {**self._error(), "candles": [], "symbol": symbol, "timeframe": timeframe}
+
+    def contract(self, symbol):
+        return {**self._error(), "symbol": symbol}
+
+    def risk_per_lot(self, symbol, direction, entry, stop_loss):
+        return 0.0
 
 
 class BrokerInterface:
