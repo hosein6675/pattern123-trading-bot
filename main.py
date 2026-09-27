@@ -122,7 +122,8 @@ async def mt5_execution_commands(request: Request):
     if request.headers.get("X-Webhook-Secret") != WEBHOOK_SECRET:
         return {"ok": False, "error": "unauthorized"}
     symbol = request.query_params.get("symbol")
-    return {"ok": True, "commands": mt5_execution_gateway.pending(symbol)}
+    commands = mt5_execution_gateway.pending(symbol)
+    return {"ok": True, "command": commands[0] if commands else None, "commands": commands}
 
 
 @app.post("/webhook/mt5/command-result")
