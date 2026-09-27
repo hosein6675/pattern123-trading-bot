@@ -64,3 +64,11 @@ def test_gateway_fails_closed_when_no_snapshot_exists():
     assert market["status"] == "error"
     assert market["source"] == "mt5"
     assert market["demo_mode"] is False
+
+
+def test_gateway_status_is_unavailable_before_live_snapshot():
+    gateway = MT5MarketGateway()
+    status = gateway.status("EURUSD")
+    assert status["status"] == "unavailable"
+    assert status["source"] == "mt5"
+    assert status["demo_mode"] is False
