@@ -49,10 +49,6 @@ string TimeframeName(ENUM_TIMEFRAMES tf)
 {
    switch(tf)
    {
-      case PERIOD_S1: return "S1"; case PERIOD_S2: return "S2"; case PERIOD_S3: return "S3";
-      case PERIOD_S4: return "S4"; case PERIOD_S5: return "S5"; case PERIOD_S6: return "S6";
-      case PERIOD_S10: return "S10"; case PERIOD_S12: return "S12"; case PERIOD_S15: return "S15";
-      case PERIOD_S20: return "S20"; case PERIOD_S30: return "S30";
       case PERIOD_M1: return "M1"; case PERIOD_M2: return "M2"; case PERIOD_M3: return "M3";
       case PERIOD_M4: return "M4"; case PERIOD_M5: return "M5"; case PERIOD_M6: return "M6";
       case PERIOD_M10: return "M10"; case PERIOD_M12: return "M12"; case PERIOD_M15: return "M15";
@@ -68,22 +64,17 @@ string TimeframeName(ENUM_TIMEFRAMES tf)
 bool StringToTimeframe(string value, ENUM_TIMEFRAMES &tf)
 {
    StringToUpper(value);
-   if(value=="S1") tf=PERIOD_S1; else if(value=="S2") tf=PERIOD_S2;
-   else if(value=="S3") tf=PERIOD_S3; else if(value=="S4") tf=PERIOD_S4;
-   else if(value=="S5") tf=PERIOD_S5; else if(value=="S6") tf=PERIOD_S6;
-   else if(value=="S10") tf=PERIOD_S10; else if(value=="S12") tf=PERIOD_S12;
-   else if(value=="S15") tf=PERIOD_S15; else if(value=="S20") tf=PERIOD_S20;
-   else if(value=="S30") tf=PERIOD_S30; else if(value=="M1") tf=PERIOD_M1;
-   else if(value=="M2") tf=PERIOD_M2; else if(value=="M3") tf=PERIOD_M3;
-   else if(value=="M4") tf=PERIOD_M4; else if(value=="M5") tf=PERIOD_M5;
-   else if(value=="M6") tf=PERIOD_M6; else if(value=="M10") tf=PERIOD_M10;
-   else if(value=="M12") tf=PERIOD_M12; else if(value=="M15") tf=PERIOD_M15;
-   else if(value=="M20") tf=PERIOD_M20; else if(value=="M30") tf=PERIOD_M30;
-   else if(value=="H1") tf=PERIOD_H1; else if(value=="H2") tf=PERIOD_H2;
-   else if(value=="H3") tf=PERIOD_H3; else if(value=="H4") tf=PERIOD_H4;
-   else if(value=="H6") tf=PERIOD_H6; else if(value=="H8") tf=PERIOD_H8;
-   else if(value=="H12") tf=PERIOD_H12; else if(value=="D1") tf=PERIOD_D1;
-   else if(value=="W1") tf=PERIOD_W1; else if(value=="MN1") tf=PERIOD_MN1;
+   if(value=="M1") tf=PERIOD_M1; else if(value=="M2") tf=PERIOD_M2;
+   else if(value=="M3") tf=PERIOD_M3; else if(value=="M4") tf=PERIOD_M4;
+   else if(value=="M5") tf=PERIOD_M5; else if(value=="M6") tf=PERIOD_M6;
+   else if(value=="M10") tf=PERIOD_M10; else if(value=="M12") tf=PERIOD_M12;
+   else if(value=="M15") tf=PERIOD_M15; else if(value=="M20") tf=PERIOD_M20;
+   else if(value=="M30") tf=PERIOD_M30; else if(value=="H1") tf=PERIOD_H1;
+   else if(value=="H2") tf=PERIOD_H2; else if(value=="H3") tf=PERIOD_H3;
+   else if(value=="H4") tf=PERIOD_H4; else if(value=="H6") tf=PERIOD_H6;
+   else if(value=="H8") tf=PERIOD_H8; else if(value=="H12") tf=PERIOD_H12;
+   else if(value=="D1") tf=PERIOD_D1; else if(value=="W1") tf=PERIOD_W1;
+   else if(value=="MN1") tf=PERIOD_MN1;
    else return false;
    return true;
 }
