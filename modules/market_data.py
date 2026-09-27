@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 
 from modules.config import active_config
 from modules.live_market_data import validate_candles, validate_tick
+from modules.mt5_market_gateway import mt5_market_gateway
 
 
 class MarketDataEngine:
@@ -33,8 +34,13 @@ class MarketDataEngine:
             count = self.DEFAULT_CANDLE_COUNT
 
         if not self.demo_mode:
+            # Render receives authoritative live snapshots from the Windows MT5 EA.
+            # Never fall back to synthetic or caller-supplied market data.
+            gateway_market = mt5_market_gateway.get_candles(symbol, timeframe)
+            if gateway_market.get("status") == "ready":
+                return gateway_market
             if self.broker is None:
-                return {"status": "error", "candles": [], "message": "Live broker is unavailable"}
+                return gateway_market
             tick = self.broker.current_price(symbol)
             tick_ok, tick_reason = validate_tick(tick)
             if not tick_ok:
