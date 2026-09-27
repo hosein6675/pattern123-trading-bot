@@ -4,15 +4,15 @@ import math
 from datetime import datetime, timedelta, timezone
 
 from modules.config import active_config
-from modules.live_market_data import validate_candles, validate_tick
+from modules.live_market_data import TIMEFRAME_OPTIONS, TIMEFRAME_SECONDS, validate_candles, validate_tick
 from modules.mt5_market_gateway import mt5_market_gateway
 
 
 class MarketDataEngine:
-    VALID_TIMEFRAMES = ("M1", "M5", "M15", "H1", "H4", "D1")
+    VALID_TIMEFRAMES = TIMEFRAME_OPTIONS
     DEFAULT_CANDLE_COUNT = 200
     DEMO_PRICES = {"EURUSD": 1.1, "GBPUSD": 1.3, "USDJPY": 150.0, "XAUUSD": 2400.0, "BTCUSD": 60000.0, "ETHUSD": 3000.0}
-    TIMEFRAME_MINUTES = {"M1": 1, "M5": 5, "M15": 15, "H1": 60, "H4": 240, "D1": 1440}
+    TIMEFRAME_SECONDS = TIMEFRAME_SECONDS
 
     def __init__(self):
         self.demo_mode = active_config.mode != "live"
@@ -66,15 +66,15 @@ class MarketDataEngine:
     def _generate_demo_candles(self, symbol, timeframe, count=200):
         count = max(int(count), self.DEFAULT_CANDLE_COUNT)
         base = self._base_price(symbol)
-        step = self.TIMEFRAME_MINUTES[timeframe]
-        start = datetime.now(timezone.utc) - timedelta(minutes=step * count)
+        step_seconds = self.TIMEFRAME_SECONDS[timeframe]
+        start = datetime.now(timezone.utc) - timedelta(seconds=step_seconds * count)
         candles = []
         previous = base
         for i in range(count):
             wave = math.sin(i / 9.0) * 0.0015 + math.sin(i / 17.0) * 0.0007
             close = base * (1.0 + wave + (i / max(count - 1, 1)) * 0.002)
             volatility = base * (0.0008 + abs(math.sin(i / 5.0)) * 0.0005)
-            candles.append({"time": (start + timedelta(minutes=step * i)).isoformat(), "open": round(previous, 5), "high": round(max(previous, close) + volatility, 5), "low": round(min(previous, close) - volatility, 5), "close": round(close, 5), "volume": 1000 + i % 500})
+            candles.append({"time": (start + timedelta(seconds=step_seconds * i)).isoformat(), "open": round(previous, 5), "high": round(max(previous, close) + volatility, 5), "low": round(min(previous, close) - volatility, 5), "close": round(close, 5), "volume": 1000 + i % 500})
             previous = close
         return candles
 
