@@ -9,11 +9,12 @@ from modules.trading_engine import TradingEngine
 from modules.config import active_config
 from modules.telegram_bot import TelegramBot
 from modules.dashboard import render
+from modules.mt5_market_gateway import mt5_market_gateway
 
 
 logging.basicConfig(level=logging.INFO)
 app = FastAPI(title="Pattern 123 Trading Assistant")
-WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "change-me")
+WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "")
 BOT_TOKEN = os.getenv("BOT_TOKEN", "")
 trading_engine = TradingEngine()
 telegram_bot = None
@@ -73,6 +74,33 @@ async def market_webhook(request: Request):
     timeframe = data.get("timeframe", active_config.timeframe)
     candles = data.get("candles", [])
     return {"ok": True, "result": trading_engine.analyze_market(symbol, timeframe, candles)}
+
+
+@app.post("/webhook/mt5")
+async def mt5_market_webhook(request: Request):
+    if not WEBHOOK_SECRET:
+        return {"ok": False, "error": "MT5 webhook secret is not configured"}
+    if request.headers.get("X-Webhook-Secret") != WEBHOOK_SECRET:
+        return {"ok": False, "error": "unauthorized"}
+
+    try:
+        data = await request.json()
+    except Exception:
+        return {"ok": False, "error": "invalid_json"}
+
+    accepted, reason = mt5_market_gateway.ingest(data)
+    if not accepted:
+        return {"ok": False, "error": reason}
+
+    symbol = str(data.get("symbol", "")).upper()
+    return {
+        "ok": True,
+        "source": "mt5",
+        "demo_mode": False,
+        "symbol": symbol,
+        "live_tick_time": int(data["tick"]["time"]),
+        "timeframes": ["M1", "M5", "M15", "H1", "H4", "D1"],
+    }
 
 
 @app.get("/dashboard/state")
