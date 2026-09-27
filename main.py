@@ -104,6 +104,17 @@ async def mt5_market_webhook(request: Request):
     }
 
 
+@app.get("/webhook/mt5/status")
+async def mt5_market_status(request: Request):
+    if not WEBHOOK_SECRET:
+        return {"ok": False, "error": "MT5 webhook secret is not configured"}
+    if request.headers.get("X-Webhook-Secret") != WEBHOOK_SECRET:
+        return {"ok": False, "error": "unauthorized"}
+    symbol = request.query_params.get("symbol", active_config.symbol)
+    status = mt5_market_gateway.status(symbol)
+    return {"ok": True, "market": status}
+
+
 @app.get("/webhook/mt5/commands")
 async def mt5_execution_commands(request: Request):
     if not WEBHOOK_SECRET:
