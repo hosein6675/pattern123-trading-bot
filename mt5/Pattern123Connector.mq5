@@ -1,5 +1,5 @@
 #property strict
-#property version   "1.1.0"
+#property version   "2.0.0"
 #property description "Pattern 123 / ARMOS - secure MT5 market-data and execution connector"
 
 #include <Trade/Trade.mqh>
@@ -7,12 +7,13 @@
 CTrade TradeEngine;
 string g_last_command_id = "";
 
-input string InpBackendUrl = "https://pattern123-trading-bot.onrender.com";
+input string InpBackendUrl = "";
 input string InpWebhookSecret = "";
 input string InpSymbol = "";
 input int    InpBarsPerTimeframe = 200;
 input int    InpPushIntervalSeconds = 15;
 input int    InpHttpTimeoutMs = 5000;
+input bool   InpSendAllStandardTimeframes = true;
 input string InpAdditionalTimeframes = "";
 input bool   InpEnableTradingCommands = false;
 
@@ -135,7 +136,11 @@ string BuildMarketPayload(string symbol)
    );
 
    string requested = "M1,M5,M15,H1,H4,D1";
-   if(StringLen(InpAdditionalTimeframes) > 0)
+   // Default: deliver every standard MT5 timeframe through MN1.
+   // Seconds/year periods are not native MT5 ENUM_TIMEFRAMES and are never fabricated.
+   if(InpSendAllStandardTimeframes)
+      requested = "M1,M2,M3,M4,M5,M6,M10,M12,M15,M20,M30,H1,H2,H3,H4,H6,H8,H12,D1,W1,MN1";
+   else if(StringLen(InpAdditionalTimeframes) > 0)
       requested += "," + InpAdditionalTimeframes;
 
    string parts[];
@@ -466,7 +471,7 @@ int OnInit()
 
    if(StringLen(InpBackendUrl) == 0)
    {
-      Print("Pattern123: backend URL is empty");
+      Print("Pattern123: backend URL is empty. Set the exact Render HTTPS URL in InpBackendUrl.");
       return INIT_PARAMETERS_INCORRECT;
    }
 
@@ -477,8 +482,10 @@ int OnInit()
    }
 
    EventSetTimer(InpPushIntervalSeconds);
-   PrintFormat("Pattern123: MT5 connector started symbol=%s backend=%s trading_commands=%s",
-               symbol, InpBackendUrl, InpEnableTradingCommands ? "ON" : "OFF");
+   PrintFormat("Pattern123: unified EA started symbol=%s backend=%s all_timeframes=%s trading_commands=%s",
+               symbol, InpBackendUrl,
+               InpSendAllStandardTimeframes ? "ON" : "OFF",
+               InpEnableTradingCommands ? "ON" : "OFF");
 
    return INIT_SUCCEEDED;
 }
