@@ -55,7 +55,7 @@ def test_gateway_rejects_missing_timeframe():
     del data["timeframes"]["H4"]
     ok, reason = gateway.ingest(data)
     assert not ok
-    assert reason.startswith("H4:")
+    assert "Missing journal timeframes" in reason
 
 
 def test_gateway_fails_closed_when_no_snapshot_exists():
