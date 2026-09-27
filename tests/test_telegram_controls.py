@@ -14,7 +14,7 @@ def test_timeframe_groups_match_operational_design():
     assert STRUCTURE_TIMEFRAMES == ANALYSIS_TIMEFRAMES == TRIGGER_TIMEFRAMES
     assert "S1" in ANALYSIS_TIMEFRAMES
     assert "MN1" in ANALYSIS_TIMEFRAMES
-    assert ("M1", "M5", "M15", "H1", "H4", "D1") in (ANALYSIS_TIMEFRAMES,)
+    assert all(item in ANALYSIS_TIMEFRAMES for item in ("M1", "M5", "M15", "H1", "H4", "D1"))
 
 
 def test_selection_can_change_all_three_timeframe_layers():
