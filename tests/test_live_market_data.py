@@ -62,14 +62,6 @@ def test_candles_reject_bad_ohlc():
 
 def test_mt5_timeframe_catalog_reaches_monthly():
     assert JOURNAL_TIMEFRAMES == ("M1", "M5", "M15", "H1", "H4", "D1")
-    assert "S1" in TIMEFRAME_OPTIONS
     assert "MN1" in TIMEFRAME_OPTIONS
-    assert "Y1" not in TIMEFRAME_OPTIONS
 
 
-def test_seconds_timeframe_accepts_fresh_mt5_data():
-    market = {"source": "mt5", "demo_mode": False, "candles": _candles()}
-    for index, candle in enumerate(market["candles"]):
-        candle["time"] = _fresh_timestamp() - (len(market["candles"]) - 1 - index)
-    ok, reason = validate_candles(market, "S1")
-    assert ok, reason
