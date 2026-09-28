@@ -13,7 +13,7 @@ class OrderResult:
 
 
 class DemoBroker:
-    """Deterministic broker used only when TRADING_MODE=demo."""
+    """Deterministic broker used only by explicit demo/backtest workflows."""
 
     def connect(self):
         return {"status": "connected", "mode": "demo"}
@@ -39,7 +39,13 @@ class DemoBroker:
         return {"status": "ready", "symbol": symbol, "bid": price, "ask": price}
 
     def contract(self, symbol):
-        return {"status": "ready", "symbol": symbol, "volume_min": active_config.min_lot, "volume_max": active_config.max_lot, "volume_step": active_config.lot_step}
+        return {
+            "status": "ready",
+            "symbol": symbol,
+            "volume_min": active_config.min_lot,
+            "volume_max": active_config.max_lot,
+            "volume_step": active_config.lot_step,
+        }
 
     def risk_per_lot(self, symbol, direction, entry, stop_loss):
         distance = abs(float(entry) - float(stop_loss))
@@ -47,7 +53,7 @@ class DemoBroker:
 
 
 class DisabledLiveBroker:
-    """Fail-closed broker used until an operator explicitly enables live trading."""
+    """Compatibility fail-closed broker for explicit disabled-live tests."""
 
     def _error(self, message="Live trading is disabled"):
         return {"status": "disabled", "mode": "live", "message": message}
@@ -84,14 +90,16 @@ class DisabledLiveBroker:
 
 
 class BrokerInterface:
-    """Broker facade with fail-closed live/demonstration separation."""
+    """Broker facade.
+
+    In live mode MT5 is always the market-data source. LIVE_TRADING_ENABLED
+    gates order submission only; it must never gate access to live prices/bars.
+    """
 
     def __init__(self):
-        if active_config.mode == "live" and active_config.live_trading_enabled:
+        if active_config.mode == "live":
             from modules.mt5_broker import MT5Broker
             self.broker = MT5Broker()
-        elif active_config.mode == "live":
-            self.broker = DisabledLiveBroker()
         else:
             self.broker = DemoBroker()
 
@@ -106,9 +114,13 @@ class BrokerInterface:
         self.broker.disconnect()
 
     def open_order(self, symbol, direction, volume, stop_loss, take_profit):
+        if self.mode == "live" and not active_config.live_trading_enabled:
+            return OrderResult(False, "", "Live trading is disabled")
         return self.broker.open_order(symbol, direction, volume, stop_loss, take_profit)
 
     def close_order(self, order_id):
+        if self.mode == "live" and not active_config.live_trading_enabled:
+            return OrderResult(False, str(order_id), "Live trading is disabled")
         return self.broker.close_order(order_id)
 
     def get_positions(self):

@@ -70,9 +70,17 @@ class MT5Broker:
                 kwargs["server"] = self.settings.server
             ok = mt5.initialize(self.settings.terminal_path, **kwargs) if self.settings.terminal_path else mt5.initialize(**kwargs)
             if not ok:
+                self._connected = False
                 return {"status": "error", "mode": "live", "message": str(mt5.last_error())}
+            terminal = mt5.terminal_info()
+            if terminal is None or not bool(getattr(terminal, "connected", False)):
+                self._connected = False
+                return {"status": "error", "mode": "live", "message": "MT5 terminal is not connected"}
             self._connected = True
             account = mt5.account_info()
+            if account is None:
+                self._connected = False
+                return {"status": "error", "mode": "live", "message": str(mt5.last_error())}
             return {"status": "connected", "mode": "live", "login": getattr(account, "login", None), "server": getattr(account, "server", None)}
         except Exception as exc:
             self._connected = False
@@ -112,7 +120,11 @@ class MT5Broker:
         if info is None:
             return {"status": "error", "symbol": symbol, "message": str(self._mt5.last_error())}
         if not getattr(info, "visible", False):
-            self._mt5.symbol_select(symbol, True)
+            if not self._mt5.symbol_select(symbol, True):
+                return {"status": "error", "symbol": symbol, "message": str(self._mt5.last_error())}
+            info = self._mt5.symbol_info(symbol)
+            if info is None:
+                return {"status": "error", "symbol": symbol, "message": str(self._mt5.last_error())}
         return {
             "status": "ready",
             "symbol": symbol,

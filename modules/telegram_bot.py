@@ -57,16 +57,23 @@ class TelegramBot:
         return InlineKeyboardMarkup(rows)
 
     def timeframe_menu(self, selection: TelegramSelection) -> InlineKeyboardMarkup:
-        return InlineKeyboardMarkup([
-            [self._button("🏗 تایم ساختار: D1 / H4 / H1", "tf:structure")],
-            [self._button(f"D1 {'✅' if selection.structure_timeframe == 'D1' else '▫️'}", "tf:s:D1"), self._button(f"H4 {'✅' if selection.structure_timeframe == 'H4' else '▫️'}", "tf:s:H4"), self._button(f"H1 {'✅' if selection.structure_timeframe == 'H1' else '▫️'}", "tf:s:H1")],
-            [self._button("🔎 تایم تحلیل: H1 / M15 / M5 / M1", "tf:analysis")],
-            [self._button(f"H1 {'✅' if selection.analysis_timeframe == 'H1' else '▫️'}", "tf:a:H1"), self._button(f"M15 {'✅' if selection.analysis_timeframe == 'M15' else '▫️'}", "tf:a:M15")],
-            [self._button(f"M5 {'✅' if selection.analysis_timeframe == 'M5' else '▫️'}", "tf:a:M5"), self._button(f"M1 {'✅' if selection.analysis_timeframe == 'M1' else '▫️'}", "tf:a:M1")],
-            [self._button("🎯 تایم تریگر: M15 / M5 / M1", "tf:trigger")],
-            [self._button(f"M15 {'✅' if selection.trigger_timeframe == 'M15' else '▫️'}", "tf:t:M15"), self._button(f"M5 {'✅' if selection.trigger_timeframe == 'M5' else '▫️'}", "tf:t:M5"), self._button(f"M1 {'✅' if selection.trigger_timeframe == 'M1' else '▫️'}", "tf:t:M1")],
-            [self._button("⬅️ منوی اصلی", "home")],
-        ])
+        rows = [[self._button("⏱ تایم‌فریم‌های MT5", "timeframes")]]
+        for title, prefix, current in (
+            ("🏗 ساختار", "s", selection.structure_timeframe),
+            ("🔎 تحلیل", "a", selection.analysis_timeframe),
+            ("🎯 تریگر", "t", selection.trigger_timeframe),
+        ):
+            rows.append([self._button(f"{title}: {current}", "timeframes")])
+            options = list(STRUCTURE_TIMEFRAMES)
+            for i in range(0, len(options), 3):
+                row = []
+                for value in options[i:i + 3]:
+                    marker = "✅" if value == current else "▫️"
+                    row.append(self._button(f"{value} {marker}", f"tf:{prefix}:{value}"))
+                rows.append(row)
+        rows.append([self._button("⬅️ منوی اصلی", "home")])
+        return InlineKeyboardMarkup(rows)
+
 
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = update.effective_user.id if update.effective_user else 0
@@ -140,10 +147,12 @@ class TelegramBot:
 
     def _timeframe_text(self, selection: TelegramSelection) -> str:
         return (
-            "⏱ ساختار تایم‌فریم‌ها\n\n"
-            f"🏗 ساختار: {selection.structure_timeframe}  |  گزینه‌ها: {', '.join(STRUCTURE_TIMEFRAMES)}\n"
-            f"🔎 تحلیل: {selection.analysis_timeframe}  |  گزینه‌ها: {', '.join(ANALYSIS_TIMEFRAMES)}\n"
-            f"🎯 تریگر: {selection.trigger_timeframe}  |  گزینه‌ها: {', '.join(TRIGGER_TIMEFRAMES)}"
+            "⏱ تایم‌فریم‌های قابل انتخاب MT5\n\n"
+            f"🏗 ساختار: {selection.structure_timeframe}\n"
+            f"🔎 تحلیل: {selection.analysis_timeframe}\n"
+            f"🎯 تریگر: {selection.trigger_timeframe}\n\n"
+            "پیش‌فرض ژورنالی: M1 / M5 / M15 / H1 / H4 / D1\n"
+            "دامنه قابل انتخاب: تایم‌فریم‌های واقعی MT5 تا MN1."
         )
 
     def _account_text(self) -> str:
