@@ -13,6 +13,7 @@ from modules.decision_engine import DecisionEngine
 from modules.config import active_config
 from modules.strategy_engine import StrategyEngine
 from modules.trendline_fan import TrendlineFanAnalyzer
+from modules.live_market_data import TIMEFRAME_OPTIONS
 
 
 class TradingEngine:
@@ -43,7 +44,7 @@ class TradingEngine:
         account = self._sync_account()
         if not active_config.is_symbol_allowed(symbol):
             return self.no_trade(symbol, timeframe, account, "Symbol not allowed")
-        if timeframe not in ("M1", "M5", "M15", "H1", "H4", "D1"):
+        if timeframe not in TIMEFRAME_OPTIONS:
             return self.no_trade(symbol, timeframe, account, "Unsupported timeframe")
 
         # In live mode, caller-supplied candles are never trusted. Analysis must
