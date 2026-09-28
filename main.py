@@ -49,7 +49,18 @@ async def shutdown_event():
 
 @app.get("/")
 async def health():
-    return {"status": "online", "service": "pattern123-trading-bot", "mode": active_config.mode, "symbol": active_config.symbol}
+    return {
+        "status": "online",
+        "service": "pattern123-trading-bot",
+        "mode": active_config.mode,
+        "symbol": active_config.symbol,
+        "telegram": "enabled" if telegram_bot else "disabled",
+    }
+
+
+@app.get("/health")
+async def health_alias():
+    return await health()
 
 
 @app.get("/broker/status")
@@ -83,16 +94,13 @@ async def mt5_market_webhook(request: Request):
         return {"ok": False, "error": "MT5 webhook secret is not configured"}
     if request.headers.get("X-Webhook-Secret") != WEBHOOK_SECRET:
         return {"ok": False, "error": "unauthorized"}
-
     try:
         data = await request.json()
     except Exception:
         return {"ok": False, "error": "invalid_json"}
-
     accepted, reason = mt5_market_gateway.ingest(data)
     if not accepted:
         return {"ok": False, "error": reason}
-
     symbol = str(data.get("symbol", "")).upper()
     return {
         "ok": True,
@@ -100,7 +108,7 @@ async def mt5_market_webhook(request: Request):
         "demo_mode": False,
         "symbol": symbol,
         "live_tick_time": int(data["tick"]["time"]),
-        "timeframes": ["M1", "M5", "M15", "H1", "H4", "D1"],
+        "timeframes": list(data.get("timeframes", {}).keys()),
     }
 
 
@@ -111,8 +119,7 @@ async def mt5_market_status(request: Request):
     if request.headers.get("X-Webhook-Secret") != WEBHOOK_SECRET:
         return {"ok": False, "error": "unauthorized"}
     symbol = request.query_params.get("symbol", active_config.symbol)
-    status = mt5_market_gateway.status(symbol)
-    return {"ok": True, "market": status}
+    return {"ok": True, "market": mt5_market_gateway.status(symbol)}
 
 
 @app.get("/webhook/mt5/commands")
