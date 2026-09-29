@@ -14,6 +14,7 @@ from modules.config import active_config
 from modules.strategy_engine import StrategyEngine
 from modules.trendline_fan import TrendlineFanAnalyzer
 from modules.trigger_engine import TriggerEngine
+from modules.trigger_engine import TriggerEngine
 from modules.live_market_data import TIMEFRAME_OPTIONS
 
 
@@ -34,13 +35,14 @@ class TradingEngine:
         self.strategy = StrategyEngine()
         self.trendline_fan = TrendlineFanAnalyzer()
         self.trigger = TriggerEngine()
+        self.trigger = TriggerEngine()
 
     def _sync_account(self):
         snapshot = self.orders.account_info()
         self.account.sync_from_broker(snapshot)
         return self.account.get_account()
 
-    def analyze_market(self, symbol, timeframe=None, candles=None):
+    def analyze_market(self, symbol, timeframe=None, candles=None, structure_timeframe=None, trigger_timeframe=None):
         timeframe = (timeframe or active_config.timeframe).upper()
         symbol = str(symbol).upper()
         account = self._sync_account()
@@ -49,39 +51,49 @@ class TradingEngine:
         if timeframe not in TIMEFRAME_OPTIONS:
             return self.no_trade(symbol, timeframe, account, "Unsupported timeframe")
 
-        # In live mode, caller-supplied candles are never trusted. Analysis must
-        # obtain the requested timeframe directly from the live MT5 adapter.
-        if active_config.mode == "live":
-            market = self.market_data.get_candles(symbol, timeframe, days=200)
-        elif candles is None:
-            market = self.market_data.get_candles(symbol, timeframe, days=200)
-        else:
-            market = {"status": "ready", "candles": candles, "source": "caller", "demo_mode": False}
+        structure_timeframe = (structure_timeframe or timeframe).upper()
+        trigger_timeframe = (trigger_timeframe or timeframe).upper()
+        for requested in (structure_timeframe, trigger_timeframe):
+            if requested not in TIMEFRAME_OPTIONS:
+                return self.no_trade(symbol, timeframe, account, f"Unsupported timeframe: {requested}")
 
-        if not market or market.get("status") != "ready":
-            return self.no_trade(
-                symbol,
-                timeframe,
-                account,
-                market.get("message", "Live MT5 market data unavailable") if isinstance(market, dict) else "Market data unavailable",
-            )
-        if active_config.mode == "live" and (
-            market.get("source") != "mt5" or market.get("demo_mode") is not False
-        ):
-            return self.no_trade(symbol, timeframe, account, "Live analysis requires MT5 market data")
+        # Each requested timeframe is independently sourced from MT5.
+        markets = {}
+        requested_timeframes = {timeframe, structure_timeframe, trigger_timeframe}
+        for requested_tf in requested_timeframes:
+            if requested_tf == timeframe and candles is not None and active_config.mode != "live":
+                markets[requested_tf] = {"status": "ready", "candles": candles, "source": "caller", "demo_mode": False}
+            else:
+                markets[requested_tf] = self.market_data.get_candles(symbol, requested_tf, days=200)
+
+        for requested_tf, layer_market in markets.items():
+            if not layer_market or layer_market.get("status") != "ready":
+                return self.no_trade(
+                    symbol, timeframe, account,
+                    layer_market.get("message", f"MT5 market data unavailable for {requested_tf}")
+                    if isinstance(layer_market, dict) else f"Market data unavailable for {requested_tf}",
+                )
+            if active_config.mode == "live" and (
+                layer_market.get("source") != "mt5" or layer_market.get("demo_mode") is not False
+            ):
+                return self.no_trade(symbol, timeframe, account, f"Live analysis requires MT5 data for {requested_tf}")
+            if len(layer_market.get("candles", [])) < 50:
+                return self.no_trade(symbol, timeframe, account, f"Not enough market candles for {requested_tf}")
+
+        market = markets[timeframe]
         candles = market.get("candles", [])
-        if not candles or len(candles) < 50:
-            return self.no_trade(symbol, timeframe, account, "Not enough market candles")
+        structure_candles = markets[structure_timeframe].get("candles", [])
+        trigger_candles = markets[trigger_timeframe].get("candles", [])
 
         news = self.news.check_news(symbol)
         if news is not None and not getattr(news, "allow_trade", True):
             return self.no_trade(symbol, timeframe, account, "News blocked trade")
 
         context = self.context.analyze(candles, symbol)
-        structure = self.structure.analyze(candles)
+        structure = self.structure.analyze(structure_candles)
         price_action = self.price_action.analyze(structure, candles)
         macd = self.macd.analyze(candles)
-        trendline_fan = self.trendline_fan.analyze(structure, candles)
+        trendline_fan = self.trendline_fan.analyze(structure, structure_candles)
 
         strategy_result = self.strategy.evaluate(
             structure=structure,
@@ -91,6 +103,26 @@ class TradingEngine:
             trendline_fan=trendline_fan,
             timeframe=timeframe,
         )
+        trigger_macd = self.macd.analyze(trigger_candles)
+        trigger_result = self.trigger.evaluate(
+            strategy=strategy_result,
+            price_action=price_action,
+            macd=trigger_macd,
+            trendline_fan=trendline_fan,
+            candles=trigger_candles,
+        )
+        if trigger_result.status != "READY":
+            return {
+                "symbol": symbol, "timeframe": timeframe, "status": "analysis_complete",
+                "structure_timeframe": structure_timeframe, "trigger_timeframe": trigger_timeframe,
+                "account": account, "market_context": context, "structure": structure,
+                "price_action": price_action, "macd": macd, "trigger_macd": trigger_macd,
+                "trendline_fan": trendline_fan, "strategy": strategy_result,
+                "trigger": trigger_result, "news": news, "risk": None, "decision": "NO_TRADE",
+                "market_source": market.get("source"), "market_time": market.get("live_tick_time"),
+                "open_positions": len(self.get_open_positions()),
+            }
+
         if not strategy_result.approved:
             return {
                 "symbol": symbol, "timeframe": timeframe, "status": "strategy_rejected",
@@ -143,6 +175,7 @@ class TradingEngine:
         )
         return {
             "symbol": symbol, "timeframe": timeframe, "status": "analysis_complete",
+            "structure_timeframe": structure_timeframe, "trigger_timeframe": trigger_timeframe,
             "account": account, "market_context": context, "structure": structure,
             "price_action": price_action, "macd": macd, "trendline_fan": trendline_fan,
             "strategy": strategy_result, "trigger": trigger_result, "news": news, "risk": risk,
