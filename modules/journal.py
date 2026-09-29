@@ -84,7 +84,6 @@ class JournalEngine:
                     CREATE TABLE IF NOT EXISTS account_snapshots(
                     snapshot_id TEXT PRIMARY KEY,observed_at TEXT,balance REAL,equity REAL,peak_equity REAL,drawdown_percent REAL,source TEXT,raw_json TEXT);
                     CREATE INDEX IF NOT EXISTS idx_events_trade ON trade_events(trade_id,event_time);
-                    CREATE UNIQUE INDEX IF NOT EXISTS idx_events_source ON trade_events(source_event_id) WHERE source_event_id IS NOT NULL;
                     CREATE INDEX IF NOT EXISTS idx_account_time ON account_snapshots(observed_at);"""
                 )
                 columns = {row[1] for row in c.execute("PRAGMA table_info(trade_events)")}
