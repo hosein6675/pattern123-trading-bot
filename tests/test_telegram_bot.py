@@ -73,3 +73,20 @@ def test_mt5_status_is_fail_closed_without_live_snapshot():
     text = bot._mt5_status_text(selection)
     assert "MT5" in text
     assert "unavailable" in text
+
+
+def test_workflow_keeps_results_per_symbol():
+    bot = TelegramBot("123456:TEST_TOKEN")
+    selection = bot._selection(42)
+    selection.results_by_symbol["EURUSD"] = {"status": "analysis_complete"}
+    selection.results_by_symbol["XAUUSD"] = {"status": "analysis_complete"}
+    assert set(selection.results_by_symbol) == {"EURUSD", "XAUUSD"}
+    selection.reset_workflow()
+    assert selection.results_by_symbol == {}
+
+
+def test_execution_and_journal_are_locked_before_analysis():
+    bot = TelegramBot("123456:TEST_TOKEN")
+    selection = bot._selection(42)
+    assert "قفل" in bot._execution_text(selection)
+    assert "تحلیل" in bot._journal_text(selection)
