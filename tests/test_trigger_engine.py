@@ -23,7 +23,7 @@ def _inputs(**overrides):
         {"volume": 100, "time": 1},
         {"volume": 150, "time": 2},
     ]
-    return strategy, price_action, macd, fan, candles
+    return [strategy, price_action, macd, fan, candles]
 
 
 def test_trigger_ready_when_all_required_confirmations_pass():
