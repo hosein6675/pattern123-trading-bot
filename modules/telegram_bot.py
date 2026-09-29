@@ -151,15 +151,22 @@ class TelegramBot:
                 selection.workflow_stage = "ANALYSIS"
                 text, markup = await self._workflow_analysis(selection), self.workflow_menu(selection)
         elif data == "wf:trigger":
-            if selection.last_result is None:
-                text, markup = "⚠️ ابتدا تحلیل Pattern123 را اجرا کنید.", self.workflow_menu(selection)
+            if not selection.results_by_symbol:
+                text, markup = "⚠️ ابتدا تحلیل Pattern123 را با داده واقعی MT5 اجرا کنید.", self.workflow_menu(selection)
             else:
                 selection.workflow_stage = "TRIGGER"
                 text, markup = self._trigger_text(selection.last_result, selection), self.workflow_menu(selection)
         elif data == "wf:execution":
-            text, markup = self._execution_text(selection), self.workflow_menu(selection)
+            if not selection.results_by_symbol:
+                text, markup = "⛔ Execution قفل است؛ ابتدا تحلیل واقعی MT5 را اجرا کنید.", self.workflow_menu(selection)
+            else:
+                text, markup = self._execution_text(selection), self.workflow_menu(selection)
         elif data == "wf:journal":
-            text, markup = self._journal_text(selection), self.workflow_menu(selection)
+            if not selection.results_by_symbol:
+                text, markup = "📒 Journal هنوز به یک تحلیل/lifecycle واقعی MT5 متصل نشده است.", self.workflow_menu(selection)
+            else:
+                selection.workflow_stage = "JOURNAL"
+                text, markup = self._journal_text(selection), self.workflow_menu(selection)
         elif data == "analysis":
             text, markup = await self._analysis_text(selection), self.main_menu()
         elif data == "news":
@@ -253,6 +260,7 @@ class TelegramBot:
                     structure_timeframe=selection.structure_timeframe,
                     trigger_timeframe=selection.trigger_timeframe)
                 selection.last_result = result
+                selection.results_by_symbol[symbol] = result
                 view = analysis_view_from_result(result, symbol=symbol, selection=selection)
                 reports.append(render_analysis(view))
             except Exception as exc:
