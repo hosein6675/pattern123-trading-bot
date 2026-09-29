@@ -29,6 +29,11 @@ string ApiUrl()
    return BaseUrl() + "/webhook/mt5";
 }
 
+string JournalApiUrl()
+{
+   return BaseUrl() + "/webhook/mt5/journal";
+}
+
 string ActiveSymbol()
 {
    if(StringLen(InpSymbol) > 0)
@@ -207,6 +212,84 @@ bool PostJson(string url, string body, string &response)
    }
 
    return true;
+}
+
+
+
+string BuildJournalPayload(string symbol)
+{
+   long observed = (long)TimeCurrent();
+   double balance = AccountInfoDouble(ACCOUNT_BALANCE);
+   double equity = AccountInfoDouble(ACCOUNT_EQUITY);
+   double margin = AccountInfoDouble(ACCOUNT_MARGIN);
+   double free_margin = AccountInfoDouble(ACCOUNT_MARGIN_FREE);
+
+   string payload = StringFormat(
+      "{\"connector\":\"pattern123-mt5-ea\",\"version\":\"1.1.0\",\"source\":\"mt5\",\"demo_mode\":false,"
+      "\"symbol\":\"%s\",\"observed_at\":%I64d,\"account\":{\"balance\":%.10f,\"equity\":%.10f,"
+      "\"margin\":%.10f,\"free_margin\":%.10f},\"events\":[",
+      JsonEscape(symbol), observed, balance, equity, margin, free_margin
+   );
+
+   datetime from_time = (datetime)MathMax(0, observed - 86400);
+   if(!HistorySelect(from_time, (datetime)observed))
+      return payload + "]}";
+
+   int total = HistoryDealsTotal();
+   bool first = true;
+   int start = MathMax(0, total - 100);
+
+   for(int i = start; i < total; i++)
+   {
+      ulong deal = HistoryDealGetTicket(i);
+      if(deal == 0)
+         continue;
+
+      string deal_symbol = HistoryDealGetString(deal, DEAL_SYMBOL);
+      if(deal_symbol != symbol)
+         continue;
+
+      long deal_time = (long)HistoryDealGetInteger(deal, DEAL_TIME);
+      if(deal_time <= 0)
+         continue;
+
+      ulong position_id = (ulong)HistoryDealGetInteger(deal, DEAL_POSITION_ID);
+      ulong order_id = (ulong)HistoryDealGetInteger(deal, DEAL_ORDER);
+      long entry_type = HistoryDealGetInteger(deal, DEAL_ENTRY);
+      long deal_type = HistoryDealGetInteger(deal, DEAL_TYPE);
+      double price = HistoryDealGetDouble(deal, DEAL_PRICE);
+      double volume = HistoryDealGetDouble(deal, DEAL_VOLUME);
+      double profit = HistoryDealGetDouble(deal, DEAL_PROFIT);
+      double commission = HistoryDealGetDouble(deal, DEAL_COMMISSION);
+      double swap = HistoryDealGetDouble(deal, DEAL_SWAP);
+      double fee = HistoryDealGetDouble(deal, DEAL_FEE);
+      long reason = HistoryDealGetInteger(deal, DEAL_REASON);
+
+      if(!first)
+         payload += ",";
+      payload += StringFormat(
+         "{\"event_id\":\"%I64u\",\"type\":\"deal\",\"time\":%I64d,"
+         "\"deal_id\":\"%I64u\",\"order_id\":\"%I64u\",\"position_id\":\"%I64u\","
+         "\"entry_type\":%I64d,\"deal_type\":%I64d,\"price\":%.10f,\"volume\":%.10f,"
+         "\"profit\":%.10f,\"commission\":%.10f,\"swap\":%.10f,\"fee\":%.10f,\"reason_code\":%I64d}",
+         deal, deal_time, deal, order_id, position_id, entry_type, deal_type,
+         price, volume, profit, commission, swap, fee, reason
+      );
+      first = false;
+   }
+
+   payload += "]}";
+   return payload;
+}
+
+bool PushJournal(string symbol)
+{
+   string body = BuildJournalPayload(symbol);
+   string response = "";
+   bool ok = PostJson(JournalApiUrl(), body, response);
+   if(ok)
+      PrintFormat("Pattern123: journal snapshot delivered. symbol=%s response=%s", symbol, response);
+   return ok;
 }
 
 bool HmacSha256(string secret, string message, string &hex)
@@ -497,5 +580,6 @@ void OnTick()
 void OnTimer()
 {
    PushMarket();
+   PushJournal(ActiveSymbol());
    PollAndExecuteCommands();
 }
