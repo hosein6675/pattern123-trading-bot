@@ -12,6 +12,7 @@ from modules.dashboard import render
 from modules.mt5_market_gateway import mt5_market_gateway
 from modules.mt5_execution_gateway import mt5_execution_gateway
 from modules.performance import PerformanceEngine
+from modules.mt5_journal_gateway import MT5JournalGateway
 
 
 logging.basicConfig(level=logging.INFO)
@@ -20,6 +21,7 @@ WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "")
 BOT_TOKEN = os.getenv("BOT_TOKEN", "")
 trading_engine = TradingEngine()
 performance_engine = PerformanceEngine()
+mt5_journal_gateway = MT5JournalGateway(trading_engine.journal)
 telegram_bot = None
 
 
@@ -158,6 +160,22 @@ async def execution_status(request: Request):
 
 def _journal_authorized(request: Request) -> bool:
     return bool(WEBHOOK_SECRET) and request.headers.get("X-Webhook-Secret") == WEBHOOK_SECRET
+
+
+@app.post("/webhook/mt5/journal")
+async def mt5_journal_webhook(request: Request):
+    if not WEBHOOK_SECRET:
+        return {"ok": False, "error": "MT5 webhook secret is not configured"}
+    if request.headers.get("X-Webhook-Secret") != WEBHOOK_SECRET:
+        return {"ok": False, "error": "unauthorized"}
+    try:
+        data = await request.json()
+    except Exception:
+        return {"ok": False, "error": "invalid_json"}
+    accepted, reason, counts = mt5_journal_gateway.ingest(data)
+    if not accepted:
+        return {"ok": False, "error": reason}
+    return {"ok": True, "source": "mt5", "counts": counts}
 
 
 @app.get("/journal/trades")
