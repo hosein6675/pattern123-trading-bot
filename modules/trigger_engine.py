@@ -72,9 +72,9 @@ class TriggerEngine:
                                 "Invalid entry/SL/TP levels")
 
         volume_status = self._volume_status(candles)
-        if volume_status is False:
+        if volume_status is not True:
             warnings.append("Volume confirmation missing")
-        elif volume_status is True:
+        else:
             reasons.append("volume_confirmation")
 
         # Volume is reported when MT5 supplies usable volume, but is not silently
