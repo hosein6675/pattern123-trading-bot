@@ -53,7 +53,8 @@ class TelegramBot:
         rows += [
             [self._button("🔄 انتخاب همه", "sym:all")],
             [self._button("🧹 پاک کردن انتخاب‌ها", "sym:none")],
-            [self._button("⬅️ منوی اصلی", "home")],
+            [self._button("➡️ ادامه Workflow", "wf:timeframes")] if workflow
+            else [self._button("⬅️ منوی اصلی", "home")],
         ]
         return InlineKeyboardMarkup(rows)
 
@@ -213,7 +214,17 @@ class TelegramBot:
         )
 
     def _workflow_text(self, selection: TelegramSelection) -> str:
-        return ("🚀 Pattern123 Workflow\n\n"\n                "1️⃣ Symbol → 2️⃣ Timeframe → 3️⃣ Structure + Analysis → 4️⃣ Trigger → 5️⃣ Execution → 6️⃣ Journal\n\n"\n                f"مرحله فعلی: {selection.workflow_stage}\n"\n                f"نمادها: {", ".join(sorted(selection.symbols)) or "انتخاب نشده"}\n"\n                f"Structure TF: {selection.structure_timeframe}\n"\n                f"Analysis TF: {selection.analysis_timeframe}\n"\n                f"Trigger TF: {selection.trigger_timeframe}")
+        symbols = ", ".join(sorted(selection.symbols)) or "انتخاب نشده"
+        return (
+            "🚀 Pattern123 Workflow\n\n"
+            "1️⃣ Symbol → 2️⃣ Timeframe → 3️⃣ Structure + Analysis → "
+            "4️⃣ Trigger → 5️⃣ Execution → 6️⃣ Journal\n\n"
+            f"مرحله فعلی: {selection.workflow_stage}\n"
+            f"نمادها: {symbols}\n"
+            f"Structure TF: {selection.structure_timeframe}\n"
+            f"Analysis TF: {selection.analysis_timeframe}\n"
+            f"Trigger TF: {selection.trigger_timeframe}"
+        )
 
     async def _workflow_analysis(self, selection: TelegramSelection) -> str:
         if self.engine is None:
@@ -237,11 +248,17 @@ class TelegramBot:
             return "🎯 Trigger در نتیجه تحلیل موجود نیست؛ اجرای معامله مجاز نیست."
         status = getattr(trigger, "status", "NO_TRADE")
         direction = getattr(trigger, "direction", "none")
-        return (f"🎯 Trigger\n\nوضعیت: {status}\nجهت: {direction}\n"
-                f"Entry: {getattr(trigger, "entry", 0)}\nSL: {getattr(trigger, "stop_loss", 0)}\n"
-                f"TP: {getattr(trigger, "take_profit", 0)}\nRR: {getattr(trigger, "risk_reward", 0)}\n\n"
-                + "\n".join(f"• {x}" for x in getattr(trigger, "reasons", [])) + "\n\n"
-                + "\n".join(f"⚠️ {x}" for x in getattr(trigger, "warnings", [])))
+        entry = getattr(trigger, "entry", 0)
+        stop_loss = getattr(trigger, "stop_loss", 0)
+        take_profit = getattr(trigger, "take_profit", 0)
+        risk_reward = getattr(trigger, "risk_reward", 0)
+        reasons = "\n".join(f"• {item}" for item in getattr(trigger, "reasons", [])) or "• هیچ تأییدیه‌ای ثبت نشده"
+        warnings = "\n".join(f"⚠️ {item}" for item in getattr(trigger, "warnings", [])) or "⚠️ بدون هشدار"
+        return (
+            f"🎯 Trigger\n\nوضعیت: {status}\nجهت: {direction}\n"
+            f"Entry: {entry}\nSL: {stop_loss}\nTP: {take_profit}\nRR: {risk_reward}\n\n"
+            f"{reasons}\n\n{warnings}"
+        )
 
     def _execution_text(self, selection: TelegramSelection) -> str:
         result = selection.last_result
