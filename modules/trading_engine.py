@@ -109,12 +109,15 @@ class TradingEngine:
             candles=candles,
         )
         if trigger_result.status != "READY":
+            # Keep the complete analysis payload visible to Telegram/dashboard while
+            # making the pre-execution gate fail closed. No order path may treat this
+            # result as executable.
             return {
-                "symbol": symbol, "timeframe": timeframe, "status": "trigger_rejected",
+                "symbol": symbol, "timeframe": timeframe, "status": "analysis_complete",
                 "account": account, "market_context": context, "structure": structure,
                 "price_action": price_action, "macd": macd, "trendline_fan": trendline_fan,
                 "strategy": strategy_result, "trigger": trigger_result, "news": news,
-                "decision": "NO_TRADE", "market_source": market.get("source"),
+                "risk": None, "decision": "NO_TRADE", "market_source": market.get("source"),
                 "market_time": market.get("live_tick_time"),
                 "open_positions": len(self.get_open_positions()),
             }
