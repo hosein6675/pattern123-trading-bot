@@ -13,6 +13,7 @@ from modules.decision_engine import DecisionEngine
 from modules.config import active_config
 from modules.strategy_engine import StrategyEngine
 from modules.trendline_fan import TrendlineFanAnalyzer
+from modules.trigger_engine import TriggerEngine
 from modules.live_market_data import TIMEFRAME_OPTIONS
 
 
@@ -32,6 +33,7 @@ class TradingEngine:
         self.decision = DecisionEngine()
         self.strategy = StrategyEngine()
         self.trendline_fan = TrendlineFanAnalyzer()
+        self.trigger = TriggerEngine()
 
     def _sync_account(self):
         snapshot = self.orders.account_info()
@@ -99,6 +101,24 @@ class TradingEngine:
                 "open_positions": len(self.get_open_positions()),
             }
 
+        trigger_result = self.trigger.evaluate(
+            strategy=strategy_result,
+            price_action=price_action,
+            macd=macd,
+            trendline_fan=trendline_fan,
+            candles=candles,
+        )
+        if trigger_result.status != "READY":
+            return {
+                "symbol": symbol, "timeframe": timeframe, "status": "trigger_rejected",
+                "account": account, "market_context": context, "structure": structure,
+                "price_action": price_action, "macd": macd, "trendline_fan": trendline_fan,
+                "strategy": strategy_result, "trigger": trigger_result, "news": news,
+                "decision": "NO_TRADE", "market_source": market.get("source"),
+                "market_time": market.get("live_tick_time"),
+                "open_positions": len(self.get_open_positions()),
+            }
+
         decision = self.decision.analyze(
             structure=structure, price_action=price_action, macd=macd,
             market_context=context, news=news,
@@ -122,7 +142,7 @@ class TradingEngine:
             "symbol": symbol, "timeframe": timeframe, "status": "analysis_complete",
             "account": account, "market_context": context, "structure": structure,
             "price_action": price_action, "macd": macd, "trendline_fan": trendline_fan,
-            "strategy": strategy_result, "news": news, "risk": risk,
+            "strategy": strategy_result, "trigger": trigger_result, "news": news, "risk": risk,
             "decision": final_decision, "market_source": market.get("source"),
             "market_time": market.get("live_tick_time"), "open_positions": len(positions),
         }
