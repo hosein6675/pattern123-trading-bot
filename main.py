@@ -4,6 +4,7 @@ import logging
 import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
+from telegram import Update
 
 from modules.trading_engine import TradingEngine
 from modules.config import active_config
@@ -17,6 +18,8 @@ logging.basicConfig(level=logging.INFO)
 app = FastAPI(title="Pattern 123 Trading Assistant")
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "")
 BOT_TOKEN = os.getenv("BOT_TOKEN", "")
+RENDER_EXTERNAL_URL = os.getenv("RENDER_EXTERNAL_URL", "").rstrip("/")
+TELEGRAM_WEBHOOK_PATH = "/telegram/webhook"
 trading_engine = TradingEngine()
 telegram_bot = None
 
@@ -30,8 +33,11 @@ async def startup_event():
         telegram_bot.build()
         await telegram_bot.application.initialize()
         await telegram_bot.application.start()
-        await telegram_bot.application.updater.start_polling()
-        logging.info("Telegram bot started")
+        if not RENDER_EXTERNAL_URL:
+            raise RuntimeError("RENDER_EXTERNAL_URL is required for Telegram webhook runtime")
+        webhook_url = f"{RENDER_EXTERNAL_URL}{TELEGRAM_WEBHOOK_PATH}"
+        await telegram_bot.application.bot.set_webhook(url=webhook_url, drop_pending_updates=False)
+        logging.info("Telegram webhook registered")
     else:
         logging.warning("BOT_TOKEN not found. Telegram disabled.")
 
@@ -40,7 +46,7 @@ async def startup_event():
 async def shutdown_event():
     global telegram_bot
     if telegram_bot:
-        await telegram_bot.application.updater.stop()
+        await telegram_bot.application.bot.delete_webhook(drop_pending_updates=False)
         await telegram_bot.application.stop()
         await telegram_bot.application.shutdown()
         logging.info("Telegram bot stopped")
@@ -61,6 +67,25 @@ async def health():
 @app.get("/health")
 async def health_alias():
     return await health()
+
+
+@app.post(TELEGRAM_WEBHOOK_PATH)
+async def telegram_webhook(request: Request):
+    """Receive Telegram updates through Render's long-lived HTTP service."""
+    if telegram_bot is None:
+        return {"ok": False, "error": "telegram_disabled"}
+    if not WEBHOOK_SECRET or request.headers.get("X-Telegram-Bot-Api-Secret-Token") != WEBHOOK_SECRET:
+        return {"ok": False, "error": "unauthorized"}
+    try:
+        payload = await request.json()
+        update = Update.de_json(payload, telegram_bot.application.bot)
+        if update is None:
+            return {"ok": False, "error": "invalid_update"}
+        await telegram_bot.application.process_update(update)
+    except Exception:
+        logging.exception("Telegram webhook processing failed")
+        return {"ok": False, "error": "update_processing_failed"}
+    return {"ok": True}
 
 
 @app.get("/broker/status")
