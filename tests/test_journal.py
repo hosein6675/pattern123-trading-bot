@@ -73,3 +73,17 @@ def test_non_mt5_snapshot_rejected():
         pass
     else:
         raise AssertionError("non-MT5 data must be rejected")
+
+
+def test_default_in_memory_journal_reuses_schema():
+    journal = JournalEngine()
+    trade_id = journal.record_trade_open(
+        symbol="EURUSD",
+        direction="buy",
+        timeframe="M1",
+        entry_price=1.1,
+        stop_loss=1.09,
+        take_profit=1.12,
+    )
+    assert journal.get_trade(trade_id)["status"] == "open"
+    assert len(journal.get_history()) == 1
