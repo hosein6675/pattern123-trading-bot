@@ -19,6 +19,12 @@ class TelegramSelection:
     analysis_timeframe: str = "M15"
     trigger_timeframe: str = "M1"
     symbols: set[str] = field(default_factory=set)
+    workflow_stage: str = "SYMBOL"
+    last_result: object | None = None
+
+    def reset_workflow(self) -> None:
+        self.workflow_stage = "SYMBOL"
+        self.last_result = None
 
     def set_structure_timeframe(self, timeframe: str) -> None:
         value = str(timeframe).upper()
