@@ -1,5 +1,6 @@
 import os
 import logging
+import hashlib
 
 import uvicorn
 from fastapi import FastAPI, Request
@@ -20,6 +21,7 @@ WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "")
 BOT_TOKEN = os.getenv("BOT_TOKEN", "")
 RENDER_EXTERNAL_URL = os.getenv("RENDER_EXTERNAL_URL", "").rstrip("/")
 TELEGRAM_WEBHOOK_PATH = "/telegram/webhook"
+TELEGRAM_WEBHOOK_SECRET = hashlib.sha256(WEBHOOK_SECRET.encode("utf-8")).hexdigest() if WEBHOOK_SECRET else ""
 trading_engine = TradingEngine()
 telegram_bot = None
 
@@ -36,7 +38,7 @@ async def startup_event():
         if not RENDER_EXTERNAL_URL:
             raise RuntimeError("RENDER_EXTERNAL_URL is required for Telegram webhook runtime")
         webhook_url = f"{RENDER_EXTERNAL_URL}{TELEGRAM_WEBHOOK_PATH}"
-        await telegram_bot.application.bot.set_webhook(url=webhook_url, drop_pending_updates=False)
+        await telegram_bot.application.bot.set_webhook(url=webhook_url, secret_token=TELEGRAM_WEBHOOK_SECRET, drop_pending_updates=False)
         logging.info("Telegram webhook registered")
     else:
         logging.warning("BOT_TOKEN not found. Telegram disabled.")
@@ -74,7 +76,7 @@ async def telegram_webhook(request: Request):
     """Receive Telegram updates through Render's long-lived HTTP service."""
     if telegram_bot is None:
         return {"ok": False, "error": "telegram_disabled"}
-    if not WEBHOOK_SECRET or request.headers.get("X-Telegram-Bot-Api-Secret-Token") != WEBHOOK_SECRET:
+    if not WEBHOOK_SECRET or request.headers.get("X-Telegram-Bot-Api-Secret-Token") != TELEGRAM_WEBHOOK_SECRET:
         return {"ok": False, "error": "unauthorized"}
     try:
         payload = await request.json()
