@@ -11,6 +11,7 @@ from modules.telegram_bot import TelegramBot
 from modules.dashboard import render
 from modules.mt5_market_gateway import mt5_market_gateway
 from modules.mt5_execution_gateway import mt5_execution_gateway
+from modules.performance import PerformanceEngine
 
 
 logging.basicConfig(level=logging.INFO)
@@ -18,6 +19,7 @@ app = FastAPI(title="Pattern 123 Trading Assistant")
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "")
 BOT_TOKEN = os.getenv("BOT_TOKEN", "")
 trading_engine = TradingEngine()
+performance_engine = PerformanceEngine()
 telegram_bot = None
 
 
@@ -152,6 +154,43 @@ async def execution_status(request: Request):
     if WEBHOOK_SECRET and request.headers.get("X-Webhook-Secret") != WEBHOOK_SECRET:
         return {"ok": False, "error": "unauthorized"}
     return {"ok": True, "execution": mt5_execution_gateway.status()}
+
+
+def _journal_authorized(request: Request) -> bool:
+    return bool(WEBHOOK_SECRET) and request.headers.get("X-Webhook-Secret") == WEBHOOK_SECRET
+
+
+@app.get("/journal/trades")
+async def journal_trades(request: Request):
+    if not _journal_authorized(request):
+        return {"ok": False, "error": "unauthorized"}
+    limit = int(request.query_params.get("limit", "500"))
+    return {"ok": True, "trades": trading_engine.journal.get_history(limit)}
+
+
+@app.get("/journal/trade/{trade_id}")
+async def journal_trade(trade_id: str, request: Request):
+    if not _journal_authorized(request):
+        return {"ok": False, "error": "unauthorized"}
+    trade = trading_engine.journal.get_trade(trade_id)
+    if trade is None:
+        return {"ok": False, "error": "trade_not_found"}
+    return {"ok": True, "trade": trade, "events": trading_engine.journal.get_events(trade_id)}
+
+
+@app.get("/performance")
+async def performance(request: Request):
+    if not _journal_authorized(request):
+        return {"ok": False, "error": "unauthorized"}
+    trades = trading_engine.journal.get_history()
+    snapshots = trading_engine.journal.get_account_snapshots()
+    summary = performance_engine.summarize(trades, snapshots)
+    return {
+        "ok": True,
+        "summary": summary.__dict__,
+        "equity_curve": performance_engine.equity_curve(snapshots),
+        "trade_markers": performance_engine.trade_markers(trades),
+    }
 
 
 @app.get("/dashboard/state")
