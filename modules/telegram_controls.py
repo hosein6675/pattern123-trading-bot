@@ -21,10 +21,12 @@ class TelegramSelection:
     symbols: set[str] = field(default_factory=set)
     workflow_stage: str = "SYMBOL"
     last_result: object | None = None
+    results_by_symbol: dict[str, object] = field(default_factory=dict)
 
     def reset_workflow(self) -> None:
         self.workflow_stage = "SYMBOL"
         self.last_result = None
+        self.results_by_symbol.clear()
 
     def set_structure_timeframe(self, timeframe: str) -> None:
         value = str(timeframe).upper()
