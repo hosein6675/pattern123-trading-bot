@@ -59,3 +59,17 @@ def test_trigger_does_not_invent_volume_confirmation():
     assert result.status == "READY"
     assert "volume_confirmation" not in result.reasons
     assert "Volume confirmation missing" in result.warnings
+
+
+def test_trigger_rejects_non_positive_risk_reward_even_with_valid_levels():
+    engine = TriggerEngine()
+    result = engine.evaluate(*_inputs(risk_reward=0))
+    assert result.status == "NO_TRADE"
+    assert result.message == "Risk/reward is unavailable"
+
+
+def test_trigger_rejects_missing_strategy_approval():
+    engine = TriggerEngine()
+    result = engine.evaluate(*_inputs(approved=False))
+    assert result.status == "NO_TRADE"
+    assert result.message == "Strategy gate rejected setup"
