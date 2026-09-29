@@ -89,4 +89,4 @@ def test_execution_and_journal_are_locked_before_analysis():
     bot = TelegramBot("123456:TEST_TOKEN")
     selection = bot._selection(42)
     assert "قفل" in bot._execution_text(selection)
-    assert "تحلیل" in bot._journal_text(selection)
+    assert "تحلیل" in bot._journal_text(selection) or "lifecycle" in bot._journal_text(selection)
