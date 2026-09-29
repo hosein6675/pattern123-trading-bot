@@ -87,6 +87,10 @@ class JournalEngine:
                     CREATE UNIQUE INDEX IF NOT EXISTS idx_events_source ON trade_events(source_event_id) WHERE source_event_id IS NOT NULL;
                     CREATE INDEX IF NOT EXISTS idx_account_time ON account_snapshots(observed_at);"""
                 )
+                columns = {row[1] for row in c.execute("PRAGMA table_info(trade_events)")}
+                if "source_event_id" not in columns:
+                    c.execute("ALTER TABLE trade_events ADD COLUMN source_event_id TEXT")
+                c.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_events_source ON trade_events(source_event_id) WHERE source_event_id IS NOT NULL")
             finally:
                 if not self._memory:
                     c.close()
