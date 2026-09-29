@@ -84,6 +84,7 @@ class JournalEngine:
                     CREATE TABLE IF NOT EXISTS account_snapshots(
                     snapshot_id TEXT PRIMARY KEY,observed_at TEXT,balance REAL,equity REAL,peak_equity REAL,drawdown_percent REAL,source TEXT,raw_json TEXT);
                     CREATE INDEX IF NOT EXISTS idx_events_trade ON trade_events(trade_id,event_time);
+                    CREATE UNIQUE INDEX IF NOT EXISTS idx_events_source ON trade_events(source_event_id) WHERE source_event_id IS NOT NULL;
                     CREATE INDEX IF NOT EXISTS idx_account_time ON account_snapshots(observed_at);"""
                 )
             finally:
@@ -120,15 +121,22 @@ class JournalEngine:
         eid = uuid.uuid4().hex
         with self._lock, self._db() as c:
             c.execute(
-                """INSERT INTO trade_events(event_id,trade_id,event_time,event_type,price,old_value_json,new_value_json,reason,actor,snapshot_json)
-                VALUES(?,?,?,?,?,?,?,?,?,?)""",
+                """INSERT OR IGNORE INTO trade_events(event_id,trade_id,event_time,event_type,price,old_value_json,new_value_json,source_event_id,reason,actor,snapshot_json)
+                VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     eid, trade_id, d.get("event_time", _now()), event_type, d.get("price"),
-                    _json(d.get("old_value")), _json(d.get("new_value")),
+                    _json(d.get("old_value")), _json(d.get("new_value")), d.get("source_event_id"),
                     d.get("reason", ""), d.get("actor", "system"), _json(d.get("snapshot")),
                 ),
             )
         return eid
+
+    def has_source_event(self, source_event_id):
+        if not source_event_id:
+            return False
+        with self._lock, self._db() as c:
+            row = c.execute("SELECT 1 FROM trade_events WHERE source_event_id=?", (str(source_event_id),)).fetchone()
+        return row is not None
 
     def record_trade_close(self, trade_id, **d):
         now = _now()
