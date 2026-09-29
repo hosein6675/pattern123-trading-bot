@@ -41,3 +41,17 @@ async def test_analysis_without_engine_fails_closed():
 
     assert "موتور تحلیل" in text
     assert "نتیجه واقعی بدون داده بازار ساخته نمی‌شود" in text
+
+
+def test_workflow_starts_at_symbol_and_exposes_gated_stages():
+    bot = TelegramBot("123456:TEST_TOKEN")
+    selection = bot._selection(42)
+    assert selection.workflow_stage == "SYMBOL"
+    markup = bot.workflow_menu(selection)
+    callbacks = [button.callback_data for row in markup.inline_keyboard for button in row]
+    assert "wf:symbols" in callbacks
+    assert "wf:timeframes" in callbacks
+    assert "wf:analyze" in callbacks
+    assert "wf:trigger" in callbacks
+    assert "wf:execution" in callbacks
+    assert "wf:journal" in callbacks
