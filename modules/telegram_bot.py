@@ -13,6 +13,7 @@ from modules.telegram_controls import (
     render_analysis,
 )
 from modules.trading_engine import TradingEngine
+from modules.mt5_market_gateway import mt5_market_gateway
 
 SYMBOLS = tuple(sorted(active_config.allowed_symbols))
 
@@ -38,7 +39,7 @@ class TelegramBot:
     def main_menu(self) -> InlineKeyboardMarkup:
         return InlineKeyboardMarkup([
             [self._button("🚀 Workflow Pattern123", "workflow")],
-            [self._button("📊 وضعیت و انتخاب‌ها", "status")],
+            [self._button("📊 وضعیت و انتخاب‌ها", "status"), self._button("🛰 MT5 Live", "mt5_status")],
             [self._button("🪙 نمادها", "symbols"), self._button("⏱ تایم‌فریم‌ها", "timeframes")],
             [self._button("📈 اجرای تحلیل", "analysis")],
             [self._button("📰 اخبار", "news"), self._button("💰 حساب", "account")],
@@ -105,6 +106,8 @@ class TelegramBot:
 
         if data in {"home", "status"}:
             text, markup = self._status_text(selection), self.main_menu()
+        elif data == "mt5_status":
+            text, markup = self._mt5_status_text(selection), self.main_menu()
         elif data == "symbols":
             text, markup = self._symbols_text(selection), self.symbol_menu(selection)
         elif data.startswith("sym:"):
@@ -179,6 +182,20 @@ class TelegramBot:
             f"🎯 تایم تریگر: {selection.trigger_timeframe}\n"
             f"⚙️ حالت: {active_config.mode}"
         )
+
+    def _mt5_status_text(self, selection: TelegramSelection) -> str:
+        lines = ["🛰 وضعیت اتصال واقعی MT5", ""]
+        for symbol in sorted(selection.symbols):
+            status = mt5_market_gateway.status(symbol)
+            state = status.get("status", "unavailable")
+            icon = {"ready": "🟢", "stale": "🟠", "unavailable": "🔴"}.get(state, "⚪")
+            lines.append(f"{icon} {symbol}: {state}")
+            if status.get("live_tick_time"):
+                lines.append(f"   Tick: {status['live_tick_time']}")
+            if status.get("message"):
+                lines.append(f"   {status['message']}")
+        lines.extend(["", "منبع مجاز تحلیل: MT5 واقعی.", "بدون snapshot معتبر، تحلیل و معامله fail-closed می‌ماند."])
+        return "\n".join(lines)
 
     def _symbols_text(self, selection: TelegramSelection) -> str:
         return "🪙 انتخاب نماد\n\n" + "\n".join(

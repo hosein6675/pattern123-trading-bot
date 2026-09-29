@@ -55,3 +55,21 @@ def test_workflow_starts_at_symbol_and_exposes_gated_stages():
     assert "wf:trigger" in callbacks
     assert "wf:execution" in callbacks
     assert "wf:journal" in callbacks
+
+
+def test_main_menu_exposes_mt5_live_status():
+    bot = TelegramBot("123456:TEST_TOKEN")
+    callbacks = [
+        button.callback_data
+        for row in bot.main_menu().inline_keyboard
+        for button in row
+    ]
+    assert "mt5_status" in callbacks
+
+
+def test_mt5_status_is_fail_closed_without_live_snapshot():
+    bot = TelegramBot("123456:TEST_TOKEN")
+    selection = bot._selection(42)
+    text = bot._mt5_status_text(selection)
+    assert "MT5" in text
+    assert "unavailable" in text
