@@ -164,7 +164,11 @@ def _journal_authorized(request: Request) -> bool:
 async def journal_trades(request: Request):
     if not _journal_authorized(request):
         return {"ok": False, "error": "unauthorized"}
-    limit = int(request.query_params.get("limit", "500"))
+    raw_limit = request.query_params.get("limit", "500")
+    try:
+        limit = max(1, min(5000, int(raw_limit)))
+    except (TypeError, ValueError):
+        return {"ok": False, "error": "invalid_limit"}
     return {"ok": True, "trades": trading_engine.journal.get_history(limit)}
 
 
