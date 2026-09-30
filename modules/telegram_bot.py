@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, InputFile, Update
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes
 
 from modules.config import active_config
@@ -14,6 +14,7 @@ from modules.telegram_controls import (
 )
 from modules.trading_engine import TradingEngine
 from modules.mt5_market_gateway import mt5_market_gateway
+from modules.analysis_chart import build_analysis_chart
 
 SYMBOLS = tuple(sorted(active_config.allowed_symbols))
 
@@ -149,7 +150,7 @@ class TelegramBot:
                 text, markup = "⚠️ مرحله نماد تکمیل نشده است.", self.workflow_menu(selection)
             else:
                 selection.workflow_stage = "ANALYSIS"
-                text, markup = await self._workflow_analysis(selection), self.workflow_menu(selection)
+                text, markup = await self._workflow_analysis(selection, query.message.chat_id if query.message else user_id), self.workflow_menu(selection)
         elif data == "wf:trigger":
             if not selection.results_by_symbol:
                 text, markup = "⚠️ ابتدا تحلیل Pattern123 را با داده واقعی MT5 اجرا کنید.", self.workflow_menu(selection)
@@ -168,7 +169,7 @@ class TelegramBot:
                 selection.workflow_stage = "JOURNAL"
                 text, markup = self._journal_text(selection), self.workflow_menu(selection)
         elif data == "analysis":
-            text, markup = await self._analysis_text(selection), self.main_menu()
+            text, markup = await self._analysis_text(selection, query.message.chat_id if query.message else user_id), self.main_menu()
         elif data == "news":
             enabled = bool(getattr(active_config, "trade_news", False))
             text, markup = f"📰 فیلتر خبر: {'فعال' if enabled else 'غیرفعال'}", self.main_menu()
@@ -250,7 +251,7 @@ class TelegramBot:
             f"Trigger TF: {selection.trigger_timeframe}"
         )
 
-    async def _workflow_analysis(self, selection: TelegramSelection) -> str:
+    async def _workflow_analysis(self, selection: TelegramSelection, chat_id: int) -> str:
         if self.engine is None:
             return "❌ موتور تحلیل متصل نیست؛ داده واقعی MT5 لازم است."
         reports = []
@@ -263,10 +264,27 @@ class TelegramBot:
                 selection.results_by_symbol[symbol] = result
                 view = analysis_view_from_result(result, symbol=symbol, selection=selection)
                 reports.append(render_analysis(view))
+                await self._send_analysis_chart(chat_id, result)
             except Exception as exc:
                 reports.append(f"📈 {symbol}\n\n❌ تحلیل اجرا نشد: {type(exc).__name__}")
         return "\n\n━━━━━━━━━━━━━━\n\n".join(reports)
 
+    async def _send_analysis_chart(self, chat_id: int, result) -> None:
+        if not isinstance(result, dict) or not result.get("chart_candles"):
+            return
+        try:
+            image = build_analysis_chart(result)
+            symbol = str(result.get("symbol", "MT5")).upper()
+            timeframe = str(result.get("timeframe", ""))
+            caption = f"🖼 نمودار تحلیل Pattern 123 | {symbol} | {timeframe}\nداده و کندل‌ها مستقیماً از MT5 آمده‌اند."
+            await self.application.bot.send_photo(
+                chat_id=chat_id,
+                photo=InputFile(image, filename=f"pattern123_{symbol}_{timeframe}.png"),
+                caption=caption,
+            )
+        except Exception:
+            import logging
+            logging.exception("Analysis chart delivery failed")
     def _trigger_text(self, result, selection: TelegramSelection) -> str:
         trigger = result.get("trigger") if isinstance(result, dict) else None
         if trigger is None:
@@ -297,7 +315,7 @@ class TelegramBot:
             return "📒 Journal پس از یک lifecycle واقعی MT5 تکمیل می‌شود. هنوز معامله‌ای در این workflow ثبت نشده است."
         return "📒 Journal\n\nپس از باز/بسته‌شدن معامله، lifecycle واقعی MT5 در Journal ثبت می‌شود. داده ساختگی یا دستی وارد Journal نمی‌شود."
 
-    async def _analysis_text(self, selection: TelegramSelection) -> str:
+    async def _analysis_text(self, selection: TelegramSelection, chat_id: int) -> str:
         if self.engine is None:
             return "📈 موتور تحلیل به تلگرام متصل نشده است؛ نتیجه واقعی بدون داده بازار ساخته نمی‌شود."
         reports: list[str] = []
@@ -306,6 +324,7 @@ class TelegramBot:
                 result = self.engine.analyze_market(symbol, selection.analysis_timeframe)
                 view = analysis_view_from_result(result, symbol=symbol, selection=selection)
                 reports.append(render_analysis(view))
+                await self._send_analysis_chart(chat_id, result)
             except Exception as exc:
                 reports.append(f"📈 {symbol}\n\n❌ تحلیل اجرا نشد.\nخطای فنی: {type(exc).__name__}")
         return "\n\n━━━━━━━━━━━━━━\n\n".join(reports)
