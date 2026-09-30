@@ -121,6 +121,7 @@ class TradingEngine:
                 "trigger": trigger_result, "news": news, "risk": None, "decision": "NO_TRADE",
                 "market_source": market.get("source"), "market_time": market.get("live_tick_time"),
                 "open_positions": len(self.get_open_positions()),
+                "chart_candles": candles,
             }
 
         if not strategy_result.approved:
@@ -131,6 +132,7 @@ class TradingEngine:
                 "strategy": strategy_result, "news": news, "decision": "NO_TRADE",
                 "market_source": market.get("source"), "market_time": market.get("live_tick_time"),
                 "open_positions": len(self.get_open_positions()),
+                "chart_candles": candles,
             }
 
         trigger_result = self.trigger.evaluate(
@@ -152,6 +154,7 @@ class TradingEngine:
                 "risk": None, "decision": "NO_TRADE", "market_source": market.get("source"),
                 "market_time": market.get("live_tick_time"),
                 "open_positions": len(self.get_open_positions()),
+                "chart_candles": candles,
             }
 
         decision = self.decision.analyze(
