@@ -13,6 +13,8 @@ from modules.telegram_bot import TelegramBot
 from modules.dashboard import render
 from modules.mt5_market_gateway import mt5_market_gateway
 from modules.mt5_execution_gateway import mt5_execution_gateway
+from modules.performance import PerformanceEngine
+from modules.mt5_journal_gateway import MT5JournalGateway
 
 
 logging.basicConfig(level=logging.INFO)
@@ -24,6 +26,8 @@ TELEGRAM_TRANSPORT = os.getenv("TELEGRAM_TRANSPORT", "webhook").strip().lower()
 TELEGRAM_WEBHOOK_PATH = "/telegram/webhook"
 TELEGRAM_WEBHOOK_SECRET = hashlib.sha256(WEBHOOK_SECRET.encode("utf-8")).hexdigest() if WEBHOOK_SECRET else ""
 trading_engine = TradingEngine()
+performance_engine = PerformanceEngine()
+mt5_journal_gateway = MT5JournalGateway(trading_engine.journal)
 telegram_bot = None
 
 
@@ -215,6 +219,63 @@ async def execution_status(request: Request):
     if WEBHOOK_SECRET and request.headers.get("X-Webhook-Secret") != WEBHOOK_SECRET:
         return {"ok": False, "error": "unauthorized"}
     return {"ok": True, "execution": mt5_execution_gateway.status()}
+
+
+def _journal_authorized(request: Request) -> bool:
+    return bool(WEBHOOK_SECRET) and request.headers.get("X-Webhook-Secret") == WEBHOOK_SECRET
+
+
+@app.post("/webhook/mt5/journal")
+async def mt5_journal_webhook(request: Request):
+    if not WEBHOOK_SECRET:
+        return {"ok": False, "error": "MT5 webhook secret is not configured"}
+    if request.headers.get("X-Webhook-Secret") != WEBHOOK_SECRET:
+        return {"ok": False, "error": "unauthorized"}
+    try:
+        data = await request.json()
+    except Exception:
+        return {"ok": False, "error": "invalid_json"}
+    accepted, reason, counts = mt5_journal_gateway.ingest(data)
+    if not accepted:
+        return {"ok": False, "error": reason}
+    return {"ok": True, "source": "mt5", "counts": counts}
+
+
+@app.get("/journal/trades")
+async def journal_trades(request: Request):
+    if not _journal_authorized(request):
+        return {"ok": False, "error": "unauthorized"}
+    raw_limit = request.query_params.get("limit", "500")
+    try:
+        limit = max(1, min(5000, int(raw_limit)))
+    except (TypeError, ValueError):
+        return {"ok": False, "error": "invalid_limit"}
+    return {"ok": True, "trades": trading_engine.journal.get_history(limit)}
+
+
+@app.get("/journal/trade/{trade_id}")
+async def journal_trade(trade_id: str, request: Request):
+    if not _journal_authorized(request):
+        return {"ok": False, "error": "unauthorized"}
+    trade = trading_engine.journal.get_trade(trade_id)
+    if trade is None:
+        return {"ok": False, "error": "trade_not_found"}
+    return {"ok": True, "trade": trade, "events": trading_engine.journal.get_events(trade_id)}
+
+
+@app.get("/performance")
+async def performance(request: Request):
+    if not _journal_authorized(request):
+        return {"ok": False, "error": "unauthorized"}
+    trades = trading_engine.journal.get_history()
+    snapshots = trading_engine.journal.get_account_snapshots()
+    summary = performance_engine.summarize(trades, snapshots)
+    return {
+        "ok": True,
+        "summary": summary.__dict__,
+        "equity_curve": performance_engine.equity_curve(snapshots),
+        "trade_markers": performance_engine.trade_markers(trades),
+    }
 
 
 @app.get("/dashboard/state")
