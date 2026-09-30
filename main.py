@@ -20,6 +20,7 @@ app = FastAPI(title="Pattern 123 Trading Assistant")
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "")
 BOT_TOKEN = os.getenv("BOT_TOKEN", "")
 RENDER_EXTERNAL_URL = os.getenv("RENDER_EXTERNAL_URL", "").rstrip("/")
+TELEGRAM_TRANSPORT = os.getenv("TELEGRAM_TRANSPORT", "webhook").strip().lower()
 TELEGRAM_WEBHOOK_PATH = "/telegram/webhook"
 TELEGRAM_WEBHOOK_SECRET = hashlib.sha256(WEBHOOK_SECRET.encode("utf-8")).hexdigest() if WEBHOOK_SECRET else ""
 trading_engine = TradingEngine()
@@ -35,22 +36,40 @@ async def startup_event():
         telegram_bot.build()
         await telegram_bot.application.initialize()
         await telegram_bot.application.start()
-        if not RENDER_EXTERNAL_URL:
-            raise RuntimeError("RENDER_EXTERNAL_URL is required for Telegram webhook runtime")
-        webhook_url = f"{RENDER_EXTERNAL_URL}{TELEGRAM_WEBHOOK_PATH}"
-        await telegram_bot.application.bot.set_webhook(url=webhook_url, secret_token=TELEGRAM_WEBHOOK_SECRET, drop_pending_updates=False)
-        webhook_info = await telegram_bot.application.bot.get_webhook_info()
-        bot_info = await telegram_bot.application.bot.get_me()
-        logging.info(
-            "Telegram runtime verified: bot_username=%s bot_id=%s webhook_url=%s pending=%s last_error=%s last_error_date=%s",
-            bot_info.username,
-            bot_info.id,
-            webhook_info.url,
-            webhook_info.pending_update_count,
-            webhook_info.last_error_message,
-            webhook_info.last_error_date,
-        )
-        logging.info("Telegram webhook registered")
+
+        if TELEGRAM_TRANSPORT == "polling":
+            await telegram_bot.application.bot.delete_webhook(drop_pending_updates=False)
+            if telegram_bot.application.updater is None:
+                raise RuntimeError("Telegram updater is unavailable for polling transport")
+            await telegram_bot.application.updater.start_polling(drop_pending_updates=False)
+            bot_info = await telegram_bot.application.bot.get_me()
+            logging.info(
+                "Telegram polling runtime verified: bot_username=%s bot_id=%s",
+                bot_info.username,
+                bot_info.id,
+            )
+            logging.info("Telegram polling started")
+        else:
+            if not RENDER_EXTERNAL_URL:
+                raise RuntimeError("RENDER_EXTERNAL_URL is required for Telegram webhook runtime")
+            webhook_url = f"{RENDER_EXTERNAL_URL}{TELEGRAM_WEBHOOK_PATH}"
+            await telegram_bot.application.bot.set_webhook(
+                url=webhook_url,
+                secret_token=TELEGRAM_WEBHOOK_SECRET,
+                drop_pending_updates=False,
+            )
+            webhook_info = await telegram_bot.application.bot.get_webhook_info()
+            bot_info = await telegram_bot.application.bot.get_me()
+            logging.info(
+                "Telegram runtime verified: bot_username=%s bot_id=%s webhook_url=%s pending=%s last_error=%s last_error_date=%s",
+                bot_info.username,
+                bot_info.id,
+                webhook_info.url,
+                webhook_info.pending_update_count,
+                webhook_info.last_error_message,
+                webhook_info.last_error_date,
+            )
+            logging.info("Telegram webhook registered")
     else:
         logging.warning("BOT_TOKEN not found. Telegram disabled.")
 
@@ -59,7 +78,10 @@ async def startup_event():
 async def shutdown_event():
     global telegram_bot
     if telegram_bot:
-        await telegram_bot.application.bot.delete_webhook(drop_pending_updates=False)
+        if TELEGRAM_TRANSPORT == "polling" and telegram_bot.application.updater is not None:
+            await telegram_bot.application.updater.stop()
+        else:
+            await telegram_bot.application.bot.delete_webhook(drop_pending_updates=False)
         await telegram_bot.application.stop()
         await telegram_bot.application.shutdown()
         logging.info("Telegram bot stopped")
@@ -74,6 +96,7 @@ async def health():
         "mode": active_config.mode,
         "symbol": active_config.symbol,
         "telegram": "enabled" if telegram_bot else "disabled",
+        "telegram_transport": TELEGRAM_TRANSPORT if telegram_bot else "disabled",
     }
 
 
@@ -87,6 +110,8 @@ async def telegram_webhook(request: Request):
     """Receive Telegram updates through Render's long-lived HTTP service."""
     if telegram_bot is None:
         return {"ok": False, "error": "telegram_disabled"}
+    if TELEGRAM_TRANSPORT != "webhook":
+        return {"ok": False, "error": "webhook_transport_disabled"}
     if not WEBHOOK_SECRET or request.headers.get("X-Telegram-Bot-Api-Secret-Token") != TELEGRAM_WEBHOOK_SECRET:
         return {"ok": False, "error": "unauthorized"}
     try:
