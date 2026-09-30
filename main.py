@@ -39,6 +39,17 @@ async def startup_event():
             raise RuntimeError("RENDER_EXTERNAL_URL is required for Telegram webhook runtime")
         webhook_url = f"{RENDER_EXTERNAL_URL}{TELEGRAM_WEBHOOK_PATH}"
         await telegram_bot.application.bot.set_webhook(url=webhook_url, secret_token=TELEGRAM_WEBHOOK_SECRET, drop_pending_updates=False)
+        webhook_info = await telegram_bot.application.bot.get_webhook_info()
+        bot_info = await telegram_bot.application.bot.get_me()
+        logging.info(
+            "Telegram runtime verified: bot_username=%s bot_id=%s webhook_url=%s pending=%s last_error=%s last_error_date=%s",
+            bot_info.username,
+            bot_info.id,
+            webhook_info.url,
+            webhook_info.pending_update_count,
+            webhook_info.last_error_message,
+            webhook_info.last_error_date,
+        )
         logging.info("Telegram webhook registered")
     else:
         logging.warning("BOT_TOKEN not found. Telegram disabled.")
