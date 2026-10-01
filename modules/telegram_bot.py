@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, InputFile, Update
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes
+import logging
 
 from modules.config import active_config
 from modules.telegram_controls import (
@@ -100,7 +101,11 @@ class TelegramBot:
 
     async def button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         query = update.callback_query
-        await query.answer()
+        try:
+            await query.answer()
+        except Exception:
+            logging.exception("Telegram callback acknowledgement failed")
+            return
         user_id = update.effective_user.id if update.effective_user else 0
         selection = self._selection(user_id)
         data = query.data or ""
@@ -179,7 +184,11 @@ class TelegramBot:
             text, markup = self._settings_text(), self.main_menu()
         else:
             text, markup = "دستور ناشناخته است.", self.main_menu()
-        await query.edit_message_text(text, reply_markup=markup)
+        try:
+            await query.edit_message_text(text, reply_markup=markup)
+        except Exception:
+            logging.exception("Telegram callback response failed: data=%s", data)
+            raise
 
     def _status_text(self, selection: TelegramSelection) -> str:
         return (
