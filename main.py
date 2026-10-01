@@ -29,6 +29,12 @@ trading_engine = TradingEngine()
 performance_engine = PerformanceEngine()
 mt5_journal_gateway = MT5JournalGateway(trading_engine.journal)
 telegram_bot = None
+telegram_runtime = {"started": False, "last_update_id": None, "last_update_type": None, "last_error": None}
+
+
+async def _telegram_error_handler(update: object, context) -> None:
+    telegram_runtime["last_error"] = type(context.error).__name__ if context.error else "unknown"
+    logging.error("Telegram handler error: %s", context.error)
 
 
 @app.on_event("startup")
@@ -40,6 +46,7 @@ async def startup_event():
         telegram_bot.build()
         await telegram_bot.application.initialize()
         await telegram_bot.application.start()
+        telegram_bot.application.add_error_handler(_telegram_error_handler)
 
         if TELEGRAM_TRANSPORT == "polling":
             await telegram_bot.application.bot.delete_webhook(drop_pending_updates=False)
@@ -52,6 +59,7 @@ async def startup_event():
                 bot_info.username,
                 bot_info.id,
             )
+            telegram_runtime["started"] = True
             logging.info("Telegram polling started")
         else:
             if not RENDER_EXTERNAL_URL:
@@ -73,6 +81,7 @@ async def startup_event():
                 webhook_info.last_error_message,
                 webhook_info.last_error_date,
             )
+            telegram_runtime["started"] = True
             logging.info("Telegram webhook registered")
     else:
         logging.warning("BOT_TOKEN not found. Telegram disabled.")
@@ -101,6 +110,7 @@ async def health():
         "symbol": active_config.symbol,
         "telegram": "enabled" if telegram_bot else "disabled",
         "telegram_transport": TELEGRAM_TRANSPORT if telegram_bot else "disabled",
+        "telegram_runtime": telegram_runtime,
     }
 
 
@@ -123,8 +133,11 @@ async def telegram_webhook(request: Request):
         update = Update.de_json(payload, telegram_bot.application.bot)
         if update is None:
             return {"ok": False, "error": "invalid_update"}
+        telegram_runtime["last_update_id"] = update.update_id
+        telegram_runtime["last_update_type"] = ("callback_query" if update.callback_query else "message" if update.message else "other")
         await telegram_bot.application.process_update(update)
     except Exception:
+        telegram_runtime["last_error"] = "webhook_processing_failed"
         logging.exception("Telegram webhook processing failed")
         return {"ok": False, "error": "update_processing_failed"}
     return {"ok": True}
