@@ -195,7 +195,8 @@ bool PostJson(string url, string body, string &response)
       ArrayResize(data, size - 1);
 
    ResetLastError();
-   int code = WebRequest("POST", url, headers, InpHttpTimeoutMs, data, ArraySize(data), result, headers);
+   string response_headers = "";
+   int code = WebRequest("POST", url, headers, InpHttpTimeoutMs, data, result, response_headers);
    if(code == -1)
    {
       int err = GetLastError();
@@ -417,8 +418,9 @@ bool PollCommands(string &response)
    string headers = "X-Webhook-Secret: " + InpWebhookSecret + "\r\n";
    char data[], result[];
    string response_headers = "";
+   ResetLastError();
    int code = WebRequest("GET", BaseUrl() + "/webhook/mt5/commands", headers,
-                         InpHttpTimeoutMs, data, 0, result, response_headers);
+                         InpHttpTimeoutMs, data, result, response_headers);
    if(code < 200 || code >= 300)
       return false;
    response = CharArrayToString(result, 0, -1, CP_UTF8);
