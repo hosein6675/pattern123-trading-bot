@@ -18,6 +18,9 @@ from modules.mt5_journal_gateway import MT5JournalGateway
 
 
 logging.basicConfig(level=logging.INFO)
+# Never emit outbound HTTP request URLs: Telegram Bot API URLs contain the bot token.
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
 app = FastAPI(title="Pattern 123 Trading Assistant")
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "")
 BOT_TOKEN = os.getenv("BOT_TOKEN", "")
